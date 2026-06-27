@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGX Breakout Scanner</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f7f7f5;--bg3:#f0efe9;
+  --text:#1a1a1a;--text2:#666660;--text3:#999993;
+  --border:rgba(0,0,0,0.11);--border2:rgba(0,0,0,0.20);
+  --green:#16a34a;--green-bg:#dcfce7;--green-dark:#166534;
+  --red:#dc2626;--red-bg:#fee2e2;--red-dark:#991b1b;
+  --blue:#2563eb;--blue-bg:#eff6ff;--blue-dark:#1e40af;
+  --amber:#b45309;--amber-bg:#fffbeb;
+  --radius:10px;--radius-sm:6px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);min-height:100vh;padding:20px 16px}
+.container{max-width:1100px;margin:0 auto}
+
+/* Header */
+.hdr{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+h1{font-size:19px;font-weight:700;color:var(--text)}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:blink 2s infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.35}}
+.dot.paused{background:var(--text3);animation:none}
+.dot.err{background:var(--red);animation:none}
+.badge{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600}
+.bl{background:var(--green-bg);color:var(--green-dark)}
+.bp{background:var(--bg2);color:var(--text2)}
+.be{background:var(--red-bg);color:var(--red-dark)}
+.by{background:var(--amber-bg);color:var(--amber)}
+
+/* MMI Dashboard */
+.mmi-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.mmi-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 16px}
+.mmi-card.bullish{border-color:#86efac;background:#f0fdf4}
+.mmi-card.bearish{border-color:#fca5a5;background:#fff5f5}
+.mmi-label{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px}
+.mmi-val{font-size:22px;font-weight:700;color:var(--text)}
+.mmi-val.pos{color:var(--green)}
+.mmi-val.neg{color:var(--red)}
+.mmi-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.mkt-status{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;margin-bottom:14px}
+.mkt-bull{background:var(--green-bg);color:var(--green-dark)}
+.mkt-bear{background:var(--red-bg);color:var(--red-dark)}
+.mkt-neut{background:var(--bg2);color:var(--text2)}
+
+/* Controls */
+.ctrl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.ts{font-size:12px;color:var(--text3);margin-right:auto}
+button{font-size:12px;padding:5px 11px;border-radius:var(--radius-sm);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer;font-family:inherit;transition:background .15s;display:inline-flex;align-items:center;gap:4px}
+button:hover{background:var(--bg2)}
+.btn-red{color:var(--red);border-color:#fca5a5}
+.btn-blue{color:var(--blue);border-color:#93c5fd}
+
+/* Settings */
+.settings{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:var(--bg2);border-radius:var(--radius-sm);margin-bottom:12px;border:0.5px solid var(--border);font-size:12px;color:var(--text2)}
+.settings label{display:flex;align-items:center;gap:6px}
+.settings input[type=range]{width:80px;accent-color:var(--blue)}
+.settings .v{font-weight:600;color:var(--text);min-width:38px}
+.settings input[type=number]{width:60px;padding:3px 6px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit}
+
+/* Sound bar */
+.snd-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 14px;background:var(--bg2);border-radius:var(--radius-sm);margin-bottom:14px;border:0.5px solid var(--border);font-size:12px;color:var(--text2)}
+.snd-bar label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.pvw{font-size:11px;padding:3px 9px}
+
+/* Proxy bar */
+.proxy-bar{font-size:12px;color:var(--text2);padding:7px 13px;background:var(--amber-bg);border:0.5px solid #fde68a;border-radius:var(--radius-sm);margin-bottom:12px}
+.sync-bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:7px 13px;background:var(--blue-bg);border:0.5px solid #bfdbfe;border-radius:var(--radius-sm);margin-bottom:10px;flex-wrap:wrap}
+.sync-bar.connected{background:var(--green-bg);border-color:#86efac}
+.sync-bar.error{background:var(--red-bg);border-color:#fca5a5}
+.sync-setup{display:flex;gap:10px;align-items:flex-end;padding:10px 13px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-sm);margin-bottom:12px;flex-wrap:wrap;font-size:12px;color:var(--text2)}
+.sync-setup label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:220px}
+.sync-setup input[type=text]{font-size:12px;padding:6px 9px;border-radius:var(--radius-sm);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;outline:none}
+.sync-setup input[type=text]:focus{border-color:var(--blue)}
+
+/* Section headers */
+.sec-hdr{font-size:13px;font-weight:700;color:var(--text);margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+.sec-hdr span.cnt{font-size:11px;font-weight:500;color:var(--text3);margin-left:4px}
+.sec-hdr .rule-tip{font-size:11px;font-weight:400;color:var(--text3)}
+
+/* Tables */
+.tbl-wrap{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{background:var(--bg2)}
+th{padding:8px 10px;text-align:right;font-weight:600;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:0.5px solid var(--border);white-space:nowrap}
+th:first-child,th:nth-child(2){text-align:left}
+td{padding:8px 10px;border-bottom:0.5px solid var(--border);color:var(--text);vertical-align:middle;text-align:right;white-space:nowrap}
+td:first-child,td:nth-child(2){text-align:left}
+tr:last-child td{border-bottom:none}
+tr:hover{background:var(--bg2)}
+tr.top-hit{background:#fffbeb}
+tr.top-hit:hover{background:#fef3c7}
+.tk{font-weight:700;font-size:12px}
+.tn{display:block;font-size:10px;color:var(--text3);font-weight:400}
+.up{color:var(--green);font-weight:600}
+.dn{color:var(--red);font-weight:600}
+.nt{color:var(--text2)}
+.hits-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700;background:var(--bg2);color:var(--text2)}
+.hits-5{background:#fef9c3;color:#92400e}
+.hits-6{background:#fde68a;color:#78350f}
+.hits-7{background:#22c55e;color:#fff}
+.hits-max{background:#16a34a;color:#fff}
+.vol-bar-wrap{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.vol-bar-bg{width:44px;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;flex-shrink:0}
+.vol-bar-fill{height:100%;border-radius:3px}
+.sig{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600}
+.sig-bo{background:var(--green-bg);color:var(--green-dark)}
+.sig-bd{background:var(--red-bg);color:var(--red-dark)}
+.sig-w{background:var(--bg2);color:var(--text2)}
+.illiq-label{font-size:10px;padding:1px 5px;border-radius:3px;background:#f3e8ff;color:#6b21a8;font-weight:600;margin-left:4px}
+.lrow td{color:var(--text2);font-size:12px;text-align:center!important;padding:16px}
+.erow td{color:var(--text3);font-size:11px;text-align:center!important}
+
+/* Alerts */
+.abox{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;min-height:46px;max-height:140px;overflow-y:auto;margin-bottom:14px}
+.ai{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:0.5px solid var(--border);font-size:12px;flex-wrap:wrap}
+.ai:last-child{border-bottom:none}
+.at{color:var(--text3);font-size:10px;min-width:55px}
+.atag{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600}
+.tu{background:var(--green-bg);color:var(--green-dark)}
+.td2{background:var(--red-bg);color:var(--red-dark)}
+.na{color:var(--text3);font-size:12px}
+.al-sec{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;display:flex;justify-content:space-between}
+
+/* Add row */
+.add-row{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.add-row input[type=text]{font-size:13px;padding:5px 10px;border-radius:var(--radius-sm);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:130px;font-family:inherit;outline:none}
+.add-row input[type=text]:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(37,99,235,.12)}
+.add-row input::placeholder{color:var(--text3)}
+.hint{font-size:11px;color:var(--text3)}
+
+#toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:var(--bg);padding:8px 15px;border-radius:var(--radius-sm);font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999}
+#toast.show{opacity:1}
+.footer{text-align:center;font-size:11px;color:var(--text3);margin-top:20px;line-height:1.8}
+
+  /* ── Mobile / iPad optimisations ── */
+  @media (max-width: 768px) {
+    body { padding: 12px 8px; }
+    .mmi-wrap { grid-template-columns: repeat(2, 1fr); }
+    .ctrl-row { gap: 6px; }
+    .ctrl-row button { font-size: 11px; padding: 5px 8px; }
+    .settings { gap: 10px; }
+    .settings input[type=range] { width: 65px; }
+    table { font-size: 11px; }
+    th, td { padding: 6px 7px; }
+    th:nth-child(4), td:nth-child(4) { display: none; } /* hide 52w range on small screens */
+    .snd-bar { gap: 6px; }
+    .sync-bar { font-size: 11px; }
+    h1 { font-size: 16px; }
+    .add-row input[type=text] { width: 110px; }
+  }
+  @media (max-width: 480px) {
+    .mmi-wrap { grid-template-columns: repeat(2, 1fr); }
+    th:nth-child(5), td:nth-child(5) { display: none; } /* hide prev close on phones */
+    .ctrl-row .btn-blue { display: none; } /* hide CSV buttons on phone, use menu */
+  }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="hdr">
+    <div class="dot" id="dot"></div>
+    <h1>SGX Breakout Scanner</h1>
+    <span class="badge bl" id="lbadge">LIVE</span>
+    <span class="badge by">~15 min delay · Yahoo Finance</span>
+  </div>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:14px">BO_20 breakout · BD5 breakdown · MMI market filter · Volume ratio · Liquidity split</p>
+
+  <div class="proxy-bar" id="proxy-bar">⚡ Connecting to Yahoo Finance...</div>
+
+  <!-- Supabase Sync (primary — works on both laptops) -->
+  <div class="sync-bar" id="sb-bar">
+    <span>🟣</span>
+    <span id="sb-status">Supabase sync: <strong>not set up</strong> — canonical MMI · works on both laptops</span>
+    <button class="pvw" onclick="toggleSetup('sb-setup')">⚙ Setup</button>
+    <button class="pvw" id="sb-now-btn" onclick="syncToSupabase()" style="display:none">↑ Sync now</button>
+    <span style="margin-left:auto;font-size:11px;color:var(--text3)" id="sb-last"></span>
+  </div>
+  <div class="sync-setup" id="sb-setup" style="display:none">
+    <label style="flex:1">Supabase Project URL:
+      <input type="text" id="sb-url" placeholder="https://xxxxxxxxxxxx.supabase.co" oninput="saveSbCreds()">
+    </label>
+    <label style="flex:2">Supabase anon public key:
+      <input type="text" id="sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." oninput="saveSbCreds()">
+    </label>
+    <button class="btn-blue" onclick="testSupabase()">Test connection</button>
+  </div>
+
+  <!-- Google Sheets Sync (all devices — daily end-of-day sync) -->
+  <div class="sync-bar" id="sync-bar" style="background:var(--bg2);border-color:var(--border)">
+    <span>📊</span>
+    <span id="sync-status">Google Sheets sync: <strong>not set up</strong> — daily archive (tap Setup to connect)</span>
+    <button class="pvw" onclick="toggleSetup('sync-setup')">⚙ Setup</button>
+    <button class="pvw" id="sync-now-btn" onclick="syncToSheet()" style="display:none">↑ Sync now</button>
+    <span style="margin-left:auto;font-size:11px;color:var(--text3)" id="sync-last"></span>
+  </div>
+  <div class="sync-setup" id="sync-setup" style="display:none">
+    <label style="flex:1">Google Apps Script Web App URL:
+      <input type="text" id="sync-url" placeholder="https://script.google.com/macros/s/XXXXX/exec" oninput="saveSyncUrl()">
+    </label>
+    <button class="btn-blue" onclick="testSync()">Test connection</button>
+  </div>
+
+  <!-- End-of-day sync reminder (shows after 5pm SGT on any device) -->
+  <div id="eod-banner" style="display:none;padding:10px 14px;background:#fef9c3;border:0.5px solid #fde68a;border-radius:var(--radius-sm);margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>🕔</span>
+    <span><strong>SGX market is closed</strong> — good time to do your daily Google Sheets sync</span>
+    <button class="btn-blue" onclick="syncToSheet();document.getElementById('eod-banner').style.display='none'" style="margin-left:auto">↑ Sync to Sheets now</button>
+    <button onclick="document.getElementById('eod-banner').style.display='none'" style="border:none;background:none;font-size:16px;cursor:pointer;color:var(--text3)">✕</button>
+  </div>
+
+  <!-- MMI Dashboard -->
+  <div class="mmi-wrap" id="mmi-wrap">
+    <div class="mmi-card" id="mmi-card">
+      <div class="mmi-label" id="mmi-label">MMI (Market Momentum)</div>
+      <div class="mmi-val" id="mmi-val">—</div>
+      <div class="mmi-sub" id="mmi-sub">Calculating...</div>
+    </div>
+    <div class="mmi-card" id="mmisi-card">
+      <div class="mmi-label">MMIsi (Strength Index)</div>
+      <div class="mmi-val" id="mmisi-val">—</div>
+      <div class="mmi-sub" id="mmisi-sub">% stocks above prev close</div>
+    </div>
+    <div class="mmi-card">
+      <div class="mmi-label">mmiN (Advancing)</div>
+      <div class="mmi-val pos" id="mmin-val">—</div>
+      <div class="mmi-sub">Stocks with +momentum</div>
+    </div>
+    <div class="mmi-card">
+      <div class="mmi-label">mmiS (Net Score)</div>
+      <div class="mmi-val" id="mmis-val">—</div>
+      <div class="mmi-sub">Advancers − Decliners</div>
+    </div>
+    <div class="mmi-card">
+      <div class="mmi-label">BO_20 Signals</div>
+      <div class="mmi-val pos" id="bo-count">—</div>
+      <div class="mmi-sub">Breakout candidates</div>
+    </div>
+    <div class="mmi-card">
+      <div class="mmi-label">BD5 Signals</div>
+      <div class="mmi-val neg" id="bd-count">—</div>
+      <div class="mmi-sub">Breakdown candidates</div>
+    </div>
+  </div>
+
+  <div class="mkt-status mkt-neut" id="mkt-status">◉ Market status loading...</div>
+
+  <!-- Controls -->
+  <div class="ctrl-row">
+    <span class="ts" id="ts">Connecting...</span>
+    <button id="tbtn" onclick="toggleScan()">⏸ Pause</button>
+    <button onclick="fetchAll()">↻ Refresh now</button>
+    <button class="btn-red" onclick="clearAlerts()">✕ Clear alerts</button>
+    <button class="btn-blue" onclick="exportCSV('bo')">↓ BO List CSV</button>
+    <button class="btn-blue" onclick="exportCSV('bd')">↓ BD List CSV</button>
+    <button class="btn-blue" onclick="exportCSV('alerts')">↓ Alerts CSV</button>
+  </div>
+
+  <div class="settings">
+    <label>BO lookback (days): <input type="number" id="bo-days" value="20" min="5" max="60" onchange="reScan()"> </label>
+    <label>BD lookback (days): <input type="number" id="bd-days" value="5" min="2" max="20" onchange="reScan()"> </label>
+    <label>Vol ratio min: <input type="range" min="1" max="5" step="0.25" value="1.5" oninput="document.getElementById('vr-v').textContent=this.value+'x';volMin=parseFloat(this.value);reScan()"><span class="v" id="vr-v">1.5x</span></label>
+    <label>Min chg%: <input type="range" min="0" max="5" step="0.25" value="0" oninput="document.getElementById('mc-v').textContent=this.value+'%';minChg=parseFloat(this.value);reScan()"><span class="v" id="mc-v">0%</span></label>
+    <label>Liquid min (SGD k/day): <input type="number" id="liq-min" value="100" min="0" onchange="reScan()"> </label>
+    <label>Auto-refresh: <input type="range" min="60" max="300" step="30" value="60" oninput="document.getElementById('rr-v').textContent=this.value+'s';setRate(parseInt(this.value))"><span class="v" id="rr-v">60s</span></label>
+  </div>
+
+  <div class="snd-bar">
+    🔔 <label><input type="checkbox" id="sndOn" checked> Sound alerts</label>
+    <span style="color:#ccc">|</span>
+    Preview: <button class="pvw" onclick="playSound('up')">▲ Breakout tone</button>
+    <button class="pvw" onclick="playSound('down')">▼ Breakdown tone</button>
+    <label style="margin-left:auto">Vol: <input type="range" min="0" max="1" step="0.1" value="0.6" style="width:65px;accent-color:var(--blue)" oninput="vol=parseFloat(this.value)"></label>
+  </div>
+
+  <!-- Alerts -->
+  <div class="al-sec"><span>🔔 Alerts</span><span id="ac">0 alerts</span></div>
+  <div class="abox" id="abox"><span class="na">No alerts yet...</span></div>
+
+  <!-- BO_20 Liquid -->
+  <div class="sec-hdr">▲ Breakout List: BO_20 — Liquid <span class="cnt" id="bo-liq-cnt"></span> <span class="rule-tip">Price &gt; 20-day high · Vol ratio &gt; threshold · Last &gt; Open · chg &gt; 0</span></div>
+  <div class="tbl-wrap"><table id="bo-liq-tbl">
+    <thead><tr><th>Hits</th><th>Stock</th><th>Last</th><th>Chg%</th><th>Last/Open</th><th>20D High</th><th>5D Low</th><th>Vol R(64)</th><th>Signal</th></tr></thead>
+    <tbody id="bo-liq-body"><tr class="lrow"><td colspan="9">Loading...</td></tr></tbody>
+  </table></div>
+
+  <!-- BO_20 Illiquid -->
+  <div class="sec-hdr">▲ Breakout List: BO_20 — Illiquid <span class="cnt" id="bo-ill-cnt"></span></div>
+  <div class="tbl-wrap"><table id="bo-ill-tbl">
+    <thead><tr><th>Hits</th><th>Stock</th><th>Last</th><th>Chg%</th><th>Last/Open</th><th>20D High</th><th>5D Low</th><th>Vol R(64)</th><th>Signal</th></tr></thead>
+    <tbody id="bo-ill-body"><tr class="lrow"><td colspan="9">Loading...</td></tr></tbody>
+  </table></div>
+
+  <!-- BD5 Liquid -->
+  <div class="sec-hdr">▼ Breakdown List: BD5 — Liquid <span class="cnt" id="bd-liq-cnt"></span> <span class="rule-tip">Price &lt; 5-day low · Vol ratio &gt; threshold · Last &lt; Open · chg &lt; 0</span></div>
+  <div class="tbl-wrap"><table id="bd-liq-tbl">
+    <thead><tr><th>Hits</th><th>Stock</th><th>Last</th><th>Chg%</th><th>Last/Open</th><th>5D Low</th><th>20D High</th><th>Vol R(64)</th><th>Signal</th></tr></thead>
+    <tbody id="bd-liq-body"><tr class="lrow"><td colspan="9">Loading...</td></tr></tbody>
+  </table></div>
+
+  <!-- BD5 Illiquid -->
+  <div class="sec-hdr">▼ Breakdown List: BD5 — Illiquid <span class="cnt" id="bd-ill-cnt"></span></div>
+  <div class="tbl-wrap"><table id="bd-ill-tbl">
+    <thead><tr><th>Hits</th><th>Stock</th><th>Last</th><th>Chg%</th><th>Last/Open</th><th>5D Low</th><th>20D High</th><th>Vol R(64)</th><th>Signal</th></tr></thead>
+    <tbody id="bd-ill-body"><tr class="lrow"><td colspan="9">Loading...</td></tr></tbody>
+  </table></div>
+
+  <!-- Add stock -->
+  <div class="add-row">
+    <input type="text" id="ainp" placeholder="e.g. G13.SI" maxlength="12" onkeydown="if(event.key==='Enter')addStock()">
+    <button onclick="addStock()">+ Add stock</button>
+    <span class="hint">SGX ticker — .SI added automatically</span>
+  </div>
+
+  <div class="footer">
+    SGX Breakout Scanner · Yahoo Finance ~15 min delay · MMI computed from watchlist · For informational use only, not financial advice
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ── Proxy chain ──
+const YQ1 = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+const YQ2 = 'https://query2.finance.yahoo.com/v8/finance/chart/';
+const PROXIES = [
+  u=>u,
+  u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://thingproxy.freeboard.io/fetch/${u}`,
+];
+let proxyIdx = 0;
+
+function updateProxyBar(i) {
+  const b = document.getElementById('proxy-bar');
+  const names = ['direct','corsproxy.io','allorigins.win','thingproxy'];
+  if (i===0) { b.style.background='#f0fdf4'; b.style.borderColor='#86efac'; b.innerHTML='✅ Direct connection working — fetching Yahoo Finance prices directly.'; }
+  else { b.style.background='#fffbeb'; b.style.borderColor='#fde68a'; b.innerHTML=`⚡ Using proxy: <strong>${names[i]}</strong> — routes around browser CORS restrictions.`; }
+}
+
+async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
+  for (let i = proxyIdx; i < PROXIES.length; i++) {
+    for (const base of [YQ1, YQ2]) {
+      try {
+        const url = PROXIES[i](base + encodeURIComponent(ticker) + params);
+        const r = await fetch(url, {signal: AbortSignal.timeout(9000)});
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        const j = await r.json();
+        const res = j?.chart?.result?.[0];
+        if (!res) throw new Error('no result');
+        proxyIdx = i;
+        updateProxyBar(i);
+        return res;
+      } catch(e) {}
+    }
+  }
+  throw new Error('All proxies failed for '+ticker);
+}
+
+// ── Watchlist (top ~140 liquid SGX counters by market cap) ──
+const DEFAULT_WL = [
+  {ticker:'D05.SI',name:'DBS Group'},
+  {ticker:'O39.SI',name:'OCBC Bank'},
+  {ticker:'U11.SI',name:'UOB'},
+  {ticker:'Z74.SI',name:'Singtel'},
+  {ticker:'S63.SI',name:'ST Engineering'},
+  {ticker:'S68.SI',name:'SGX Ltd'},
+  {ticker:'C6L.SI',name:'SIA'},
+  {ticker:'F34.SI',name:'Wilmar Intl'},
+  {ticker:'J36.SI',name:'Jardine Matheson'},
+  {ticker:'BN4.SI',name:'Keppel Ltd'},
+  {ticker:'C38U.SI',name:'CapitaLand Integ Comm Trust'},
+  {ticker:'9CI.SI',name:'CapitaLand Investment'},
+  {ticker:'A17U.SI',name:'CapitaLand Ascendas REIT'},
+  {ticker:'H78.SI',name:'Hongkong Land'},
+  {ticker:'C07.SI',name:'Jardine C&C'},
+  {ticker:'U96.SI',name:'Sembcorp Industries'},
+  {ticker:'Y92.SI',name:'Thai Beverage'},
+  {ticker:'BS6.SI',name:'YZJ Shipbuilding'},
+  {ticker:'U14.SI',name:'UOL Group'},
+  {ticker:'C09.SI',name:'City Developments'},
+  {ticker:'G13.SI',name:'Genting Singapore'},
+  {ticker:'5E2.SI',name:'Seatrium'},
+  {ticker:'D01.SI',name:'DFI Retail Group'},
+  {ticker:'N2IU.SI',name:'Mapletree PanAsia Comm Trust'},
+  {ticker:'M44U.SI',name:'Mapletree Logistics Trust'},
+  {ticker:'S58.SI',name:'SATS Ltd'},
+  {ticker:'AJBU.SI',name:'Keppel DC REIT'},
+  {ticker:'ME8U.SI',name:'Mapletree Industrial Trust'},
+  {ticker:'V03.SI',name:'Venture Corp'},
+  {ticker:'U06.SI',name:'Singapore Land Group'},
+  {ticker:'VC2.SI',name:'Olam Group'},
+  {ticker:'J69U.SI',name:'Frasers Centrepoint Trust'},
+  {ticker:'OV8.SI',name:'Sheng Siong'},
+  {ticker:'TQ5.SI',name:'Frasers Property'},
+  {ticker:'T82U.SI',name:'Suntec REIT'},
+  {ticker:'K71U.SI',name:'Keppel REIT'},
+  {ticker:'EB5.SI',name:'First Resources'},
+  {ticker:'CJLU.SI',name:'NetLink NBN Trust'},
+  {ticker:'BUOU.SI',name:'Frasers L&C Trust'},
+  {ticker:'U10.SI',name:'UOB-Kay Hian'},
+  {ticker:'S59.SI',name:'SIA Engineering'},
+  {ticker:'E5H.SI',name:'Golden Agri-Resources'},
+  {ticker:'HMN.SI',name:'CapitaLand Ascott Trust'},
+  {ticker:'H02.SI',name:'Haw Par Corp'},
+  {ticker:'A7RU.SI',name:'Keppel Infrastructure Trust'},
+  {ticker:'AWX.SI',name:'AEM Holdings'},
+  {ticker:'AVP.SI',name:'AvePoint'},
+  {ticker:'C52.SI',name:'ComfortDelGro'},
+  {ticker:'AIY.SI',name:'iFAST Corp'},
+  {ticker:'P8Z.SI',name:'Bumitama Agri'},
+  {ticker:'C2PU.SI',name:'Parkway Life REIT'},
+  {ticker:'F17.SI',name:'GuocoLand'},
+  {ticker:'S07.SI',name:'Shangri-La Asia'},
+  {ticker:'H15.SI',name:'Hotel Properties'},
+  {ticker:'H22.SI',name:'Hong Leong Asia'},
+  {ticker:'NS8U.SI',name:'Hutchison Port Holdings Trust'},
+  {ticker:'558.SI',name:'UMS Integration'},
+  {ticker:'8YZ.SI',name:'YZJ Maritime Development'},
+  {ticker:'BVA.SI',name:'Top Glove'},
+  {ticker:'F99.SI',name:'Fraser & Neave'},
+  {ticker:'TS0U.SI',name:'OUE REIT'},
+  {ticker:'9A4U.SI',name:'ESR-REIT'},
+  {ticker:'8C8U.SI',name:'Centurion Accommodation REIT'},
+  {ticker:'JYEU.SI',name:'Lendlease Global Comm REIT'},
+  {ticker:'CC3.SI',name:'StarHub'},
+  {ticker:'BSL.SI',name:'Raffles Medical'},
+  {ticker:'AGS.SI',name:'The Hour Glass'},
+  {ticker:'G92.SI',name:'China Aviation Oil'},
+  {ticker:'F03.SI',name:'Food Empire'},
+  {ticker:'CY6U.SI',name:'CapitaLand India Trust'},
+  {ticker:'H13.SI',name:'Ho Bee Land'},
+  {ticker:'OYY.SI',name:'PropNex'},
+  {ticker:'Z25.SI',name:'Yanlord Land'},
+  {ticker:'NTDU.SI',name:'NTT DC REIT'},
+  {ticker:'CWBU.SI',name:'Stoneweg Europe Stapled Trust'},
+  {ticker:'AP4.SI',name:'Riverstone Holdings'},
+  {ticker:'O5RU.SI',name:'AIMS APAC REIT'},
+  {ticker:'E28.SI',name:'Frencken Group'},
+  {ticker:'BEC.SI',name:'BRC Asia'},
+  {ticker:'B61.SI',name:'Bukit Sembawang'},
+  {ticker:'P40U.SI',name:'Starhill Global REIT'},
+  {ticker:'OU8.SI',name:'Centurion Corp'},
+  {ticker:'P15.SI',name:'Pacific Century Regional'},
+  {ticker:'STG.SI',name:'Sri Trang Gloves'},
+  {ticker:'Q5T.SI',name:'Far East Hospitality Trust'},
+  {ticker:'W05.SI',name:'Wing Tai Holdings'},
+  {ticker:'NC2.SI',name:'Sri Trang Agro'},
+  {ticker:'ADN.SI',name:'First Sponsor Group'},
+  {ticker:'S41.SI',name:'Hong Leong Finance'},
+  {ticker:'AU8U.SI',name:'CapitaLand China Trust'},
+  {ticker:'S61.SI',name:'SBS Transit'},
+  {ticker:'P52.SI',name:'Pan-United Corp'},
+  {ticker:'F9D.SI',name:'Boustead Singapore'},
+  {ticker:'544.SI',name:'CSE Global'},
+  {ticker:'J85.SI',name:'CDL Hospitality Trusts'},
+  {ticker:'T6I.SI',name:'ValueMax Group'},
+  {ticker:'CRPU.SI',name:'Sasseur REIT'},
+  {ticker:'BWM.SI',name:'Zheneng Jinjiang Environment'},
+  {ticker:'YF8.SI',name:'YZJ Financial Holding'},
+  {ticker:'5WJ.SI',name:'MoneyMax Financial'},
+  {ticker:'DCRU.SI',name:'Digital Core REIT'},
+  {ticker:'P9D.SI',name:'Civmec'},
+  {ticker:'MZH.SI',name:'Nanofilm Technologies'},
+  {ticker:'RE4.SI',name:'Geo Energy Resources'},
+  {ticker:'LJ3.SI',name:'OUE Ltd'},
+  {ticker:'H30.SI',name:'Hong Fok Corp'},
+  {ticker:'S20.SI',name:'Straits Trading'},
+  {ticker:'5UF.SI',name:'Aspial Lifestyle'},
+  {ticker:'CHZ.SI',name:'HRnetGroup'},
+  {ticker:'S08.SI',name:'Singapore Post'},
+  {ticker:'H07.SI',name:'Stamford Land'},
+  {ticker:'8AZ.SI',name:'Aztech Global'},
+  {ticker:'U9E.SI',name:'China Everbright Water'},
+  {ticker:'WJP.SI',name:'VICOM Ltd'},
+  {ticker:'QES.SI',name:'China Sunsine Chemical'},
+  {ticker:'5LY.SI',name:'Marco Polo Marine'},
+  {ticker:'E3B.SI',name:'Wee Hur Holdings'},
+  {ticker:'C41.SI',name:'Cortina Holdings'},
+  {ticker:'P34.SI',name:'Delfi Ltd'},
+  {ticker:'O10.SI',name:'Far East Orchard'},
+  {ticker:'Q01.SI',name:'QAF Ltd'},
+  {ticker:'T15.SI',name:'Tan Chong International'},
+  {ticker:'QC7.SI',name:'Q&M Dental'},
+  {ticker:'H18.SI',name:'Hotel Grand Central'},
+  {ticker:'5JS.SI',name:'Indofood Agri Resources'},
+  {ticker:'S56.SI',name:'Samudera Shipping'},
+  {ticker:'F83.SI',name:'COSCO Shipping Intl'},
+  {ticker:'B58.SI',name:'Banyan Tree Holdings'},
+  {ticker:'U13.SI',name:'United Overseas Insurance'},
+  {ticker:'AW9U.SI',name:'First REIT'},
+  {ticker:'1MZ.SI',name:'Nam Cheong'},
+  {ticker:'5TP.SI',name:'CNMC Goldmine'},
+  {ticker:'BN2.SI',name:'Valuetronics Holdings'},
+  {ticker:'S35.SI',name:'Sing Investments & Finance'},
+  {ticker:'M01.SI',name:'Metro Holdings'},
+  {ticker:'Y03.SI',name:'Yeo Hiap Seng'},
+  {ticker:'42C.SI',name:'iX Biopharma'},
+  {ticker:'S85.SI',name:'Straco Corp'},
+  {ticker:'BBW.SI',name:'Azeus Systems Holdings'}
+];
+
+let wl = [...DEFAULT_WL];
+let sd = {};   // stock data keyed by ticker
+let al = [];   // alert log
+let volMin = 1.5, minChg = 0, running = true, ivl = null, rate = 60000, actx = null, vol = 0.6;
+let prevAlerted = {};
+
+wl.forEach(s => { sd[s.ticker] = {...s, loaded:false, err:false}; });
+
+// ── Audio ──
+function getACtx() {
+  if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  if (actx.state==='suspended') actx.resume();
+  return actx;
+}
+function playSound(type) {
+  try {
+    const ctx=getACtx(), now=ctx.currentTime;
+    const notes=type==='up'?[[523.25,0,.13],[659.25,.14,.13],[783.99,.28,.22]]:[[659.25,0,.13],[523.25,.14,.13],[392.00,.28,.24]];
+    notes.forEach(([f,d,dur])=>{ const o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g);g.connect(ctx.destination);o.type='sine'; o.frequency.setValueAtTime(f,now+d); g.gain.setValueAtTime(0,now+d); g.gain.linearRampToValueAtTime(vol*0.4,now+d+0.02); g.gain.exponentialRampToValueAtTime(0.001,now+d+dur); o.start(now+d);o.stop(now+d+dur+0.05); });
+  } catch(e){}
+}
+
+// ── Fetch & parse one stock ──
+async function loadStock(s) {
+  try {
+    // Fetch 3 months of daily data for rolling calculations
+    const res = await fetchWithProxy(s.ticker, '?interval=1d&range=3mo');
+    const meta = res.meta;
+    const quotes = res.indicators?.quote?.[0];
+    const timestamps = res.timestamp || [];
+
+    if (!meta || !quotes) throw new Error('no quotes');
+
+    const closes  = quotes.close  || [];
+    const highs    = quotes.high   || [];
+    const lows     = quotes.low    || [];
+    const volumes  = quotes.volume || [];
+    const opens    = quotes.open   || [];
+
+    // Filter out nulls (non-trading days)
+    const valid = timestamps.map((t,i) => ({
+      t, c:closes[i], h:highs[i], l:lows[i], v:volumes[i], o:opens[i]
+    })).filter(x => x.c != null && x.v != null);
+
+    if (valid.length < 10) throw new Error('not enough data');
+
+    // Most recent completed bar + live price
+    const last = valid[valid.length-1];
+    const price = meta.regularMarketPrice || last.c;
+    const prevClose = meta.chartPreviousClose || meta.previousClose || valid[valid.length-2]?.c;
+    const openToday = meta.regularMarketOpen || last.o;
+    const volToday  = meta.regularMarketVolume || last.v;
+
+    // 20-day high (prior 20 days excluding today)
+    const prior = valid.slice(0, -1);  // exclude today
+    const boDays = parseInt(document.getElementById('bo-days').value) || 20;
+    const bdDays = parseInt(document.getElementById('bd-days').value) || 5;
+    const slice20 = prior.slice(-boDays);
+    const slice5  = prior.slice(-bdDays);
+    const slice64 = prior.slice(-64);
+
+    const high20 = slice20.length ? Math.max(...slice20.map(x=>x.h).filter(v=>v!=null)) : null;
+    const low5   = slice5.length  ? Math.min(...slice5.map(x=>x.l).filter(v=>v!=null))  : null;
+    const avgVol64 = slice64.length ? slice64.reduce((s,x)=>s+(x.v||0),0)/slice64.length : null;
+
+    const volRatio = (avgVol64 && avgVol64>0) ? volToday/avgVol64 : null;
+    const lastOpen = (openToday && openToday>0) ? price/openToday : null;
+    const chgPct   = prevClose ? (price-prevClose)/prevClose*100 : null;
+    const avgDailyVal = avgVol64 ? avgVol64 * price / 1000 : null; // SGD thousands
+
+    // Liquidity: liquid if avg daily value > 100k SGD
+    const liqThresh = parseFloat(document.getElementById('liq-min').value) || 100;
+    const isLiquid  = avgDailyVal ? avgDailyVal >= liqThresh : false;
+
+    sd[s.ticker] = {
+      ...sd[s.ticker],
+      price, prevClose, openToday, volToday,
+      high20, low5, volRatio, lastOpen, chgPct,
+      avgDailyVal, isLiquid,
+      low52: meta.fiftyTwoWeekLow,
+      high52: meta.fiftyTwoWeekHigh,
+      loaded: true, err: false,
+    };
+  } catch(e) {
+    sd[s.ticker].err = true;
+    sd[s.ticker].loaded = false;
+  }
+}
+
+// ── MMI calculation ──
+function computeMMI() {
+  const loaded = Object.values(sd).filter(s=>s.loaded&&!s.err);
+  if (!loaded.length) return null;
+
+  const adv = loaded.filter(s=>s.chgPct>0).length;
+  const dec = loaded.filter(s=>s.chgPct<0).length;
+  const flat= loaded.filter(s=>s.chgPct===0).length;
+  const total = loaded.length;
+
+  const mmiN  = adv;
+  const mmiS  = adv - dec;
+  const mmisi = adv / total;   // % advancing (0–1)
+  // MMI: weighted net momentum (advancers weighted by chg magnitude)
+  const sumAdv = loaded.filter(s=>s.chgPct>0).reduce((a,s)=>a+s.chgPct,0);
+  const sumDec = loaded.filter(s=>s.chgPct<0).reduce((a,s)=>a+Math.abs(s.chgPct),0);
+  const mmi = sumAdv > 0 || sumDec > 0 ? (sumAdv - sumDec)/(sumAdv + sumDec) * (adv+dec)/total * 10 : 0;
+
+  return { mmi, mmisi, mmiN, mmiS, adv, dec, flat, total };
+}
+
+// ── Scoring: hits ──
+function scoreBO(s, mmi) {
+  let hits = 0;
+  const boDays = parseInt(document.getElementById('bo-days').value)||20;
+  // Rule 1: MMI > 0
+  if (mmi && mmi.mmi > 0) hits++;
+  // Rule 2: MMIsi > 0.6
+  if (mmi && mmi.mmisi > 0.6) hits++;
+  // Rule 3: Price breaks 20-day high
+  if (s.high20 && s.price > s.high20) hits++;
+  // Rule 4: Last > Open
+  if (s.lastOpen && s.lastOpen > 1.0) hits++;
+  // Rule 5: Volume ratio > threshold
+  if (s.volRatio && s.volRatio >= volMin) hits++;
+  // Rule 6: Change > minChg
+  if (s.chgPct != null && s.chgPct > minChg) hits++;
+  // Rule 7: Liquidity
+  if (s.isLiquid) hits++;
+  return hits;
+}
+
+function scoreBD(s, mmi) {
+  let hits = 0;
+  // Rule 1: MMI < 0
+  if (mmi && mmi.mmi < 0) hits++;
+  // Rule 2: MMIsi < 0.4
+  if (mmi && mmi.mmisi < 0.4) hits++;
+  // Rule 3: Price breaks 5-day low
+  if (s.low5 && s.price < s.low5) hits++;
+  // Rule 4: Last < Open
+  if (s.lastOpen && s.lastOpen < 1.0) hits++;
+  // Rule 5: Volume ratio > threshold
+  if (s.volRatio && s.volRatio >= volMin) hits++;
+  // Rule 6: Change < -minChg
+  if (s.chgPct != null && s.chgPct < -minChg) hits++;
+  // Rule 7: Liquidity
+  if (s.isLiquid) hits++;
+  return hits;
+}
+
+function reScan() {
+  const mmiData = computeMMI();
+  updateMMICards(mmiData);
+  renderBO(mmiData);
+  renderBD(mmiData);
+  fireNewAlerts(mmiData);
+}
+
+// ── Fetch all ──
+async function fetchAll() {
+  setStatus('live');
+  document.getElementById('ts').textContent = 'Refreshing...';
+  await Promise.all(wl.map(s => loadStock(s)));
+  reScan();
+  const n = new Date();
+  document.getElementById('ts').textContent = 'Last updated: '+n.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · SGT';
+  const anyErr = Object.values(sd).some(s=>s.err);
+  const anyLoaded = Object.values(sd).some(s=>s.loaded);
+  setStatus(anyLoaded ? (anyErr ? 'live' : 'live') : 'err');
+  maybeAutoSync();
+}
+
+// ── Supabase Sync (primary — works on both laptops) ──
+// Architecture:
+//   PUSH  → both laptops upsert their stock readings into stock_pool table
+//   DB    → Supabase stores the merged pool (last-write-wins per ticker)
+//   PULL  → after push, scanner reads back canonical MMI computed from full pool
+//   ALERT → alerts written to alert_log table instantly when fired
+
+let sbUrl = '';
+let sbKey = '';
+let sbConnected = false;
+let sbInFlight = false;
+
+function toggleSetup(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
+function saveSbCreds() {
+  sbUrl = document.getElementById('sb-url').value.trim().replace(/\/$/, '');
+  sbKey = document.getElementById('sb-key').value.trim();
+  try {
+    window.localStorage.setItem('sgx_sb_url', sbUrl);
+    window.localStorage.setItem('sgx_sb_key', sbKey);
+  } catch(e) {}
+  updateSbBar(sbUrl && sbKey ? 'idle' : 'unset');
+}
+
+function loadSbCredsFromStorage() {
+  try {
+    const u = window.localStorage.getItem('sgx_sb_url');
+    const k = window.localStorage.getItem('sgx_sb_key');
+    if (u && k) {
+      sbUrl = u; sbKey = k;
+      document.getElementById('sb-url').value = u;
+      document.getElementById('sb-key').value = k;
+      updateSbBar('idle');
+    }
+  } catch(e) {}
+}
+
+function updateSbBar(state) {
+  const bar = document.getElementById('sb-bar');
+  const status = document.getElementById('sb-status');
+  const btn = document.getElementById('sb-now-btn');
+  sbConnected = (state === 'idle' || state === 'syncing');
+  if (state === 'unset') {
+    bar.className = 'sync-bar'; bar.style.background = 'var(--bg2)'; bar.style.borderColor = 'var(--border)';
+    status.innerHTML = 'Supabase sync: <strong>not set up</strong> — canonical MMI · works on both laptops';
+    btn.style.display = 'none';
+  } else if (state === 'idle') {
+    bar.className = 'sync-bar connected'; bar.style.background = ''; bar.style.borderColor = '';
+    status.innerHTML = 'Supabase sync: <strong>connected ✓</strong> — canonical MMI · shared across both laptops';
+    btn.style.display = '';
+  } else if (state === 'syncing') {
+    bar.className = 'sync-bar connected'; bar.style.background = ''; bar.style.borderColor = '';
+    status.innerHTML = 'Supabase sync: <strong>syncing…</strong>';
+    btn.style.display = '';
+  } else if (state === 'error') {
+    bar.className = 'sync-bar error'; bar.style.background = ''; bar.style.borderColor = '';
+    status.innerHTML = 'Supabase sync: <strong>connection failed</strong> — check URL and key';
+    btn.style.display = '';
+  }
+}
+
+// Low-level Supabase REST helper
+async function sbRequest(path, method, body) {
+  const r = await fetch(sbUrl + '/rest/v1/' + path, {
+    method: method || 'GET',
+    headers: {
+      'apikey': sbKey,
+      'Authorization': 'Bearer ' + sbKey,
+      'Content-Type': 'application/json',
+      'Prefer': method === 'POST' ? 'resolution=merge-duplicates,return=minimal' : 'return=representation'
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!r.ok) throw new Error('Supabase HTTP ' + r.status);
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function testSupabase() {
+  saveSbCreds();
+  if (!sbUrl || !sbKey) { showToast('Paste both the URL and anon key first.'); return; }
+  updateSbBar('syncing');
+  try {
+    // Simple SELECT to verify connection — just read 1 row from mmi_history
+    await sbRequest('mmi_history?limit=1', 'GET');
+    updateSbBar('idle');
+    document.getElementById('sb-last').textContent = 'Test successful ✓';
+    showToast('✓ Connected to Supabase!');
+  } catch(e) {
+    updateSbBar('error');
+    showToast('Could not connect — check the URL and anon key, and that tables were created.');
+  }
+}
+
+async function syncToSupabase(silent) {
+  if (!sbUrl || !sbKey || sbInFlight) return;
+  sbInFlight = true;
+  if (!silent) updateSbBar('syncing');
+  try {
+    const laptopId = getLaptopId();
+    const loaded = Object.values(sd).filter(s => s.loaded && !s.err);
+
+    // 1. Upsert this laptop's stock readings into shared pool (merge by ticker)
+    const stockRows = loaded.map(s => ({
+      ticker: s.ticker, name: s.name,
+      price: s.price, chg_pct: s.chgPct,
+      vol_ratio: s.volRatio, last_open: s.lastOpen,
+      high20: s.high20, low5: s.low5,
+      liquid: s.isLiquid, laptop: laptopId,
+      updated_at: new Date().toISOString()
+    }));
+    if (stockRows.length > 0) {
+      await sbRequest('stock_pool', 'POST', stockRows);
+    }
+
+    // 2. Read back the FULL merged pool (all devices' readings combined)
+    const pool = await sbRequest('stock_pool?select=*', 'GET');
+    const fullPool = pool || [];
+
+    // 3. Compute canonical MMI from full merged pool
+    const canonical = computeMMIFromPool(fullPool);
+
+    // 4. Compute canonical BO/BD signals from full merged pool
+    const { boSignals, bdSignals } = computeBOBDFromPool(fullPool, canonical);
+
+    // 5. Write canonical MMI to history
+    if (canonical) {
+      await sbRequest('mmi_history', 'POST', [{
+        mmi: canonical.mmi, mmisi: canonical.mmisi,
+        mmi_n: canonical.mmiN, mmi_s: canonical.mmiS,
+        advancers: canonical.adv, decliners: canonical.dec,
+        total_stocks: canonical.total, laptop: laptopId
+      }]);
+      canonicalMMI = canonical;
+      updateMMICards(canonical, true);
+    }
+
+    // 6. Store canonical BO/BD and re-render tables with authoritative signals
+    if (boSignals !== null) {
+      canonicalBO = boSignals;
+      canonicalBD = bdSignals;
+      renderCanonicalBO(boSignals);
+      renderCanonicalBD(bdSignals);
+      // Update MMI card counts
+      document.getElementById('bo-count').textContent = boSignals.length;
+      document.getElementById('bd-count').textContent = bdSignals.length;
+    }
+
+    const now = new Date();
+    updateSbBar('idle');
+    document.getElementById('sb-last').textContent =
+      'Synced ' + now.toLocaleTimeString('en-SG', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) +
+      ' · pool: ' + fullPool.length + ' stocks · BO:' + (boSignals||[]).length + ' BD:' + (bdSignals||[]).length;
+
+  } catch(e) {
+    console.warn('Supabase sync error:', e);
+    updateSbBar('error');
+  } finally {
+    sbInFlight = false;
+  }
+}
+
+// Write a single alert to Supabase alert_log immediately when it fires
+async function logAlertToSupabase(alert) {
+  if (!sbUrl || !sbKey) return;
+  try {
+    await sbRequest('alert_log', 'POST', [{
+      ticker: alert.ticker, name: alert.name,
+      alert_type: alert.type === 'bo' ? 'BO_20' : 'BD5',
+      price: alert.price, chg_pct: alert.pct,
+      hits: alert.hits, laptop: getLaptopId()
+    }]);
+  } catch(e) {}
+}
+
+// Compute canonical MMI from the merged stock pool rows returned by Supabase
+function computeMMIFromPool(pool) {
+  const valid = pool.filter(s => s.chg_pct != null);
+  if (!valid.length) return null;
+  const adv = valid.filter(s => s.chg_pct > 0);
+  const dec = valid.filter(s => s.chg_pct < 0);
+  const total = valid.length;
+  const mmiN = adv.length;
+  const mmiS = adv.length - dec.length;
+  const mmisi = adv.length / total;
+  const sumAdv = adv.reduce((a,s) => a + Math.abs(s.chg_pct), 0);
+  const sumDec = dec.reduce((a,s) => a + Math.abs(s.chg_pct), 0);
+  const mmi = (sumAdv + sumDec > 0)
+    ? (sumAdv - sumDec) / (sumAdv + sumDec) * (adv.length + dec.length) / total * 10 : 0;
+  return {
+    mmi: Math.round(mmi * 1000) / 1000,
+    mmisi: Math.round(mmisi * 10000) / 10000,
+    mmiN, mmiS, adv: adv.length, dec: dec.length,
+    flat: total - adv.length - dec.length, total, source: 'supabase-canonical'
+  };
+}
+
+// Canonical BO/BD state — set after each Supabase sync
+let canonicalBO = null;
+let canonicalBD = null;
+
+// Compute canonical BO_20 and BD5 signals from the full merged Supabase pool
+// Pool rows use snake_case (from DB): chg_pct, vol_ratio, last_open, high20, low5, liquid
+function computeBOBDFromPool(pool, mmi) {
+  if (!pool.length) return { boSignals: null, bdSignals: null };
+  const vMin = volMin;
+  const mChg = minChg;
+
+  // Score each stock for BO
+  const boScored = pool
+    .filter(s => s.high20 && s.price > s.high20)
+    .map(s => {
+      let hits = 0;
+      if (mmi && mmi.mmi > 0) hits++;
+      if (mmi && mmi.mmisi > 0.6) hits++;
+      if (s.high20 && s.price > s.high20) hits++;
+      if (s.last_open && s.last_open > 1.0) hits++;
+      if (s.vol_ratio && s.vol_ratio >= vMin) hits++;
+      if (s.chg_pct != null && s.chg_pct > mChg) hits++;
+      if (s.liquid) hits++;
+      return { ...s, hits };
+    })
+    .sort((a,b) => b.hits - a.hits || b.vol_ratio - a.vol_ratio);
+
+  // Score each stock for BD
+  const bdScored = pool
+    .filter(s => s.low5 && s.price < s.low5)
+    .map(s => {
+      let hits = 0;
+      if (mmi && mmi.mmi < 0) hits++;
+      if (mmi && mmi.mmisi < 0.4) hits++;
+      if (s.low5 && s.price < s.low5) hits++;
+      if (s.last_open && s.last_open < 1.0) hits++;
+      if (s.vol_ratio && s.vol_ratio >= vMin) hits++;
+      if (s.chg_pct != null && s.chg_pct < -mChg) hits++;
+      if (s.liquid) hits++;
+      return { ...s, hits };
+    })
+    .sort((a,b) => b.hits - a.hits || b.vol_ratio - a.vol_ratio);
+
+  return { boSignals: boScored, bdSignals: bdScored };
+}
+
+// Render canonical BO signals (pool uses snake_case field names from Supabase)
+function renderCanonicalBO(signals) {
+  const liq = signals.filter(s => s.liquid);
+  const ill = signals.filter(s => !s.liquid);
+  document.getElementById('bo-liq-cnt').textContent = '(' + liq.length + ') ✓ canonical';
+  document.getElementById('bo-ill-cnt').textContent = '(' + ill.length + ') ✓ canonical';
+  document.getElementById('bo-liq-body').innerHTML = liq.length ? liq.map(s => rowBOPool(s)).join('') : emptyRow('No liquid BO_20 signals');
+  document.getElementById('bo-ill-body').innerHTML = ill.length ? ill.map(s => rowBOPool(s)).join('') : emptyRow('No illiquid BO_20 signals');
+}
+
+function renderCanonicalBD(signals) {
+  const liq = signals.filter(s => s.liquid);
+  const ill = signals.filter(s => !s.liquid);
+  document.getElementById('bd-liq-cnt').textContent = '(' + liq.length + ') ✓ canonical';
+  document.getElementById('bd-ill-cnt').textContent = '(' + ill.length + ') ✓ canonical';
+  document.getElementById('bd-liq-body').innerHTML = liq.length ? liq.map(s => rowBDPool(s)).join('') : emptyRow('No liquid BD5 signals');
+  document.getElementById('bd-ill-body').innerHTML = ill.length ? ill.map(s => rowBDPool(s)).join('') : emptyRow('No illiquid BD5 signals');
+}
+
+// Row renderers for pool data (snake_case fields from Supabase)
+function rowBOPool(s) {
+  const p = s.chg_pct, cls = p>0?'up':p<0?'dn':'nt';
+  const vr = s.vol_ratio||0;
+  const vcol = vr>=3?'#16a34a':vr>=1.5?'#ca8a04':'#94a3b8';
+  const vpct = Math.min(100,(vr/4)*100).toFixed(0);
+  const rc = s.hits>=6?'top-hit':'';
+  const illiq = !s.liquid?'<span class="illiq-label">illiq</span>':'';
+  const lo = s.last_open ? s.last_open.toFixed(4) : '—';
+  return `<tr class="${rc}">
+    <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
+    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><strong>${fp(s.price)}</strong></td>
+    <td class="${cls}">${fpc(p)}</td>
+    <td class="${s.last_open&&s.last_open>1?'up':s.last_open&&s.last_open<1?'dn':'nt'}">${lo}</td>
+    <td style="color:var(--text2)">${fp(s.high20)}</td>
+    <td style="color:var(--text2)">${fp(s.low5)}</td>
+    <td><div class="vol-bar-wrap"><span style="font-size:11px;font-weight:600;color:${vcol}">${fvr(s.vol_ratio)}</span><div class="vol-bar-bg"><div class="vol-bar-fill" style="width:${vpct}%;background:${vcol}"></div></div></div></td>
+    <td><span class="sig sig-bo">▲ BO_20</span></td>
+  </tr>`;
+}
+
+function rowBDPool(s) {
+  const p = s.chg_pct, cls = p>0?'up':p<0?'dn':'nt';
+  const vr = s.vol_ratio||0;
+  const vcol = vr>=3?'#dc2626':vr>=1.5?'#ca8a04':'#94a3b8';
+  const vpct = Math.min(100,(vr/4)*100).toFixed(0);
+  const rc = s.hits>=6?'top-hit':'';
+  const illiq = !s.liquid?'<span class="illiq-label">illiq</span>':'';
+  const lo = s.last_open ? s.last_open.toFixed(4) : '—';
+  return `<tr class="${rc}">
+    <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
+    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><strong>${fp(s.price)}</strong></td>
+    <td class="${cls}">${fpc(p)}</td>
+    <td class="${s.last_open&&s.last_open<1?'dn':s.last_open&&s.last_open>1?'up':'nt'}">${lo}</td>
+    <td style="color:var(--text2)">${fp(s.low5)}</td>
+    <td style="color:var(--text2)">${fp(s.high20)}</td>
+    <td><div class="vol-bar-wrap"><span style="font-size:11px;font-weight:600;color:${vcol}">${fvr(s.vol_ratio)}</span><div class="vol-bar-bg"><div class="vol-bar-fill" style="width:${vpct}%;background:${vcol}"></div></div></div></td>
+    <td><span class="sig sig-bd">▼ BD5</span></td>
+  </tr>`;
+}
+
+// ── Google Sheets Sync ──
+// Architecture:
+//   PUSH  → scanner sends all individual stock readings to the Sheet every 5 min
+//   Sheet → Apps Script computes canonical MMI from the fullest dataset received
+//   PULL  → scanner fetches the Sheet-computed MMI back and displays it as authoritative
+// This ensures BOTH laptops always show the SAME MMI regardless of how many stocks
+// each laptop happened to load successfully.
+
+let sheetSyncUrl = '';
+let lastSyncTime = null;
+let syncInFlight = false;
+let canonicalMMI = null;   // MMI computed by the Sheet — single source of truth
+let localMMIData = null;   // MMI computed locally — for reference/debug only
+
+function loadSyncUrlFromStorage() {
+  try {
+    const saved = window.localStorage.getItem('sgx_scanner_sheet_url');
+    if (saved) {
+      sheetSyncUrl = saved;
+      document.getElementById('sync-url').value = saved;
+      updateSyncBarState('idle');
+    }
+  } catch(e) {}
+}
+function saveSyncUrl() {
+  sheetSyncUrl = document.getElementById('sync-url').value.trim();
+  try { window.localStorage.setItem('sgx_scanner_sheet_url', sheetSyncUrl); } catch(e) {}
+  updateSyncBarState(sheetSyncUrl ? 'idle' : 'unset');
+}
+
+function updateSyncBarState(state, extra) {
+  const bar = document.getElementById('sync-bar');
+  const status = document.getElementById('sync-status');
+  const btn = document.getElementById('sync-now-btn');
+  if (state === 'unset') {
+    bar.className = 'sync-bar'; bar.style.background = 'var(--bg2)'; bar.style.borderColor = 'var(--border)';
+    status.innerHTML = 'Google Sheets sync: <strong>not set up</strong> — tap Setup to connect';
+    btn.style.display = 'none';
+  } else if (state === 'idle') {
+    bar.className = 'sync-bar connected'; bar.style.background = ''; bar.style.borderColor = '';
+    status.innerHTML = 'Google Sheets sync: <strong>connected ✓</strong> — tap "↑ Sync now" after market close';
+    btn.style.display = '';
+  } else if (state === 'syncing') {
+    bar.className = 'sync-bar connected'; bar.style.background = ''; bar.style.borderColor = '';
+    status.innerHTML = 'Google Sheets sync: <strong>syncing…</strong>';
+    btn.style.display = '';
+  } else if (state === 'error') {
+    bar.className = 'sync-bar error'; bar.style.background = ''; bar.style.borderColor = '';
+    status.innerHTML = 'Google Sheets sync: <strong>connection failed</strong> — check the URL';
+    btn.style.display = '';
+  }
+}
+
+// ── Market close reminder ──
+// Shows a yellow banner after 5pm SGT reminding user to sync to Google Sheets
+// Checks once per minute; only shows once per day
+let eodReminderShownDate = '';
+function checkMarketCloseReminder() {
+  if (!sheetSyncUrl) return; // only show if Sheets is connected
+  const now = new Date();
+  // SGT = UTC+8
+  const sgt = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  const sgtHour = sgt.getUTCHours();
+  const sgtDay  = sgt.toISOString().slice(0,10);
+  // Show banner after 5pm (17:00) SGT, but only once per calendar day
+  if (sgtHour >= 17 && sgtDay !== eodReminderShownDate) {
+    eodReminderShownDate = sgtDay;
+    const banner = document.getElementById('eod-banner');
+    if (banner) banner.style.display = 'flex';
+  }
+}
+// Check every minute
+setInterval(checkMarketCloseReminder, 60000);
+// Also check immediately on load
+setTimeout(checkMarketCloseReminder, 3000);
+
+async function testSync() {
+  saveSyncUrl();
+  if (!sheetSyncUrl) { showToast('Paste your Apps Script URL first.'); return; }
+  updateSyncBarState('syncing');
+  try {
+    const r = await fetch(sheetSyncUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify({ type:'test', message:'SGX Scanner connection test', time:new Date().toISOString() })
+    });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    updateSyncBarState('idle');
+    document.getElementById('sync-last').textContent = 'Test successful ✓';
+    showToast('✓ Connected to Google Sheet!');
+  } catch(e) {
+    updateSyncBarState('error');
+    showToast('Could not reach the Sheet — check URL and "Anyone" access setting.');
+  }
+}
+
+// PUSH: send all individual stock data to Sheet so it can compute canonical MMI
+async function syncToSheet(silent) {
+  if (!sheetSyncUrl || syncInFlight) return;
+  syncInFlight = true;
+  if (!silent) updateSyncBarState('syncing');
+  try {
+    const localMMI = computeMMI();
+    const loaded = Object.values(sd).filter(s=>s.loaded&&!s.err);
+    const boList = loaded.filter(s=>s.high20&&s.price>s.high20).map(s=>({...s,hits:scoreBO(s,localMMI)}));
+    const bdList = loaded.filter(s=>s.low5&&s.price<s.low5).map(s=>({...s,hits:scoreBD(s,localMMI)}));
+
+    const payload = {
+      type: 'snapshot',
+      time: new Date().toISOString(),
+      laptop: getLaptopId(),
+      // Send ALL individual stock readings so Sheet can compute MMI from the union
+      // of stocks successfully loaded across BOTH laptops
+      stockReadings: loaded.map(s=>({
+        ticker:s.ticker, name:s.name,
+        price:s.price, prevClose:s.prevClose, chgPct:s.chgPct,
+        volRatio:s.volRatio, lastOpen:s.lastOpen,
+        high20:s.high20, low5:s.low5, liquid:s.isLiquid
+      })),
+      localMMI: localMMI || {},
+      boSignals: boList.map(s=>({ticker:s.ticker,name:s.name,price:s.price,chgPct:s.chgPct,lastOpen:s.lastOpen,high20:s.high20,low5:s.low5,volRatio:s.volRatio,hits:s.hits,liquid:s.isLiquid})),
+      bdSignals: bdList.map(s=>({ticker:s.ticker,name:s.name,price:s.price,chgPct:s.chgPct,lastOpen:s.lastOpen,high20:s.high20,low5:s.low5,volRatio:s.volRatio,hits:s.hits,liquid:s.isLiquid})),
+      recentAlerts: al.slice(0,20),
+    };
+
+    const r = await fetch(sheetSyncUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+
+    // Parse the response — Apps Script returns the canonical MMI it computed
+    let resp = {};
+    try { resp = await r.json(); } catch(e) {}
+    if (resp.canonicalMMI) {
+      canonicalMMI = resp.canonicalMMI;
+      // Re-render MMI cards with the authoritative Sheet number
+      updateMMICards(canonicalMMI, true);
+    }
+
+    lastSyncTime = new Date();
+    updateSyncBarState('idle');
+    document.getElementById('sync-last').textContent =
+      'Last synced: '+lastSyncTime.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+
+      ' · '+payload.stockReadings.length+' stocks pushed';
+  } catch(e) {
+    updateSyncBarState('error');
+  } finally {
+    syncInFlight = false;
+  }
+}
+
+// Each laptop needs a stable identity so the Sheet can show which laptop contributed what
+function getLaptopId() {
+  try {
+    let id = window.localStorage.getItem('sgx_laptop_id');
+    if (!id) {
+      id = 'laptop_' + Math.random().toString(36).slice(2,7);
+      window.localStorage.setItem('sgx_laptop_id', id);
+    }
+    return id;
+  } catch(e) { return 'unknown'; }
+}
+
+let lastAutoSyncMinute = -1;
+function maybeAutoSync() {
+  const now = new Date();
+  const bucket = Math.floor(now.getTime() / 300000); // every 5 min
+  if (bucket !== lastAutoSyncMinute) {
+    lastAutoSyncMinute = bucket;
+    // Supabase: primary sync (works on both laptops)
+    if (sbUrl && sbKey) syncToSupabase(true);
+    // Google Sheets: backup archive (Lenovo only — will silently fail on HP)
+    if (sheetSyncUrl) syncToSheet(true);
+  }
+}
+
+// ── Render MMI ──
+// fromSheet=true means this is the canonical Sheet-computed MMI; false = local estimate only
+function updateMMICards(m, fromSheet) {
+  if (!m) return;
+  const mmiEl = document.getElementById('mmi-val');
+  const mmiCard = document.getElementById('mmi-card');
+  const mmiLabel = document.getElementById('mmi-label');
+
+  mmiEl.textContent = m.mmi.toFixed(3);
+  mmiEl.className = 'mmi-val '+(m.mmi>0?'pos':'neg');
+  mmiCard.className = 'mmi-card '+(m.mmi>0?'bullish':'bearish');
+
+  // Clearly label whether this is the authoritative Sheet MMI or a local estimate
+  if (fromSheet) {
+    mmiLabel.textContent = 'MMI — CANONICAL (Sheet)';
+    mmiLabel.style.color = 'var(--green-dark)';
+    document.getElementById('mmi-sub').textContent = (m.mmi>0?'Bullish ':'Bearish ') + '· '+m.total+' stocks · from Google Sheet ✓';
+  } else {
+    mmiLabel.textContent = 'MMI — LOCAL ESTIMATE';
+    mmiLabel.style.color = 'var(--amber)';
+    document.getElementById('mmi-sub').textContent = (m.mmi>0?'Bullish ':'Bearish ') + '· '+m.total+' stocks loaded · sync for canonical';
+  }
+
+  const siel = document.getElementById('mmisi-val');
+  siel.textContent = (m.mmisi*100).toFixed(1)+'%';
+  siel.className = 'mmi-val '+(m.mmisi>0.6?'pos':m.mmisi<0.4?'neg':'nt');
+  document.getElementById('mmisi-card').className = 'mmi-card '+(m.mmisi>0.6?'bullish':m.mmisi<0.4?'bearish':'');
+
+  document.getElementById('mmin-val').textContent = m.mmiN+' / '+m.total;
+  const sEl = document.getElementById('mmis-val');
+  sEl.textContent = (m.mmiS>=0?'+':'')+m.mmiS;
+  sEl.className = 'mmi-val '+(m.mmiS>0?'pos':m.mmiS<0?'neg':'nt');
+
+  // Market status banner always driven by best available MMI
+  const st = document.getElementById('mkt-status');
+  const src = fromSheet ? ' · ✓ canonical' : ' · ⚠ local estimate';
+  if (m.mmi>0 && m.mmisi>0.6) { st.className='mkt-status mkt-bull'; st.textContent='◉ BULLISH — MMI > 0 & MMIsi > 0.6 · Aggressive BO signals active'+src; }
+  else if (m.mmi<0 || m.mmisi<0.4) { st.className='mkt-status mkt-bear'; st.textContent='◉ BEARISH — BD signals active · Caution on longs'+src; }
+  else { st.className='mkt-status mkt-neut'; st.textContent='◉ NEUTRAL — Mixed signals · Filter carefully'+src; }
+}
+
+function reScan() {
+  // Always compute local MMI for BO/BD scoring and as fallback display
+  localMMIData = computeMMI();
+  // Display: prefer canonical Sheet MMI if we have it, fall back to local
+  const displayMMI = canonicalMMI || localMMIData;
+  updateMMICards(displayMMI, !!canonicalMMI);
+  // BO/BD: use canonical Supabase signals if available, otherwise local
+  if (canonicalBO !== null && canonicalBD !== null) {
+    renderCanonicalBO(canonicalBO);
+    renderCanonicalBD(canonicalBD);
+    document.getElementById('bo-count').textContent = canonicalBO.length;
+    document.getElementById('bd-count').textContent = canonicalBD.length;
+  } else {
+    // Fallback: render from locally loaded stocks only
+    renderBO(displayMMI);
+    renderBD(displayMMI);
+  }
+  fireNewAlerts(displayMMI);
+}
+
+// ── Render tables ──
+function fp(p,d=2){ if(p==null||isNaN(p))return'—'; return p<1&&p>-1&&p!==0?p.toFixed(3):p.toFixed(d); }
+function fpc(p){ if(p==null||isNaN(p))return'—'; return (p>=0?'+':'')+p.toFixed(2)+'%'; }
+function fvr(v){ if(v==null||isNaN(v))return'—'; return v.toFixed(2)+'x'; }
+function flo(v){ if(v==null||isNaN(v))return'—'; return v.toFixed(4); }
+
+function hitsClass(h) {
+  if(h>=7) return 'hits-max';
+  if(h>=6) return 'hits-7';
+  if(h>=5) return 'hits-6';
+  if(h>=4) return 'hits-5';
+  return '';
+}
+
+function rowBO(s, hitsN) {
+  const p=s.chgPct, cls=p>0?'up':p<0?'dn':'nt';
+  const vr=s.volRatio||0;
+  const vcol=vr>=3?'#16a34a':vr>=1.5?'#ca8a04':'#94a3b8';
+  const vpct=Math.min(100,(vr/4)*100).toFixed(0);
+  const rc=hitsN>=6?'top-hit':'';
+  const illiq=!s.isLiquid?`<span class="illiq-label">illiq</span>`:'';
+  return `<tr class="${rc}">
+    <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
+    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><strong>${fp(s.price)}</strong></td>
+    <td class="${cls}">${fpc(p)}</td>
+    <td class="${s.lastOpen&&s.lastOpen>1?'up':s.lastOpen&&s.lastOpen<1?'dn':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
+    <td style="color:var(--text2)">${fp(s.high20)}</td>
+    <td style="color:var(--text2)">${fp(s.low5)}</td>
+    <td><div class="vol-bar-wrap"><span style="font-size:11px;font-weight:600;color:${vcol}">${fvr(s.volRatio)}</span><div class="vol-bar-bg"><div class="vol-bar-fill" style="width:${vpct}%;background:${vcol}"></div></div></div></td>
+    <td><span class="sig sig-bo">▲ BO_20</span></td>
+  </tr>`;
+}
+
+function rowBD(s, hitsN) {
+  const p=s.chgPct, cls=p>0?'up':p<0?'dn':'nt';
+  const vr=s.volRatio||0;
+  const vcol=vr>=3?'#dc2626':vr>=1.5?'#ca8a04':'#94a3b8';
+  const vpct=Math.min(100,(vr/4)*100).toFixed(0);
+  const rc=hitsN>=6?'top-hit':'';
+  const illiq=!s.isLiquid?`<span class="illiq-label">illiq</span>`:'';
+  return `<tr class="${rc}">
+    <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
+    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><strong>${fp(s.price)}</strong></td>
+    <td class="${cls}">${fpc(p)}</td>
+    <td class="${s.lastOpen&&s.lastOpen<1?'dn':s.lastOpen&&s.lastOpen>1?'up':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
+    <td style="color:var(--text2)">${fp(s.low5)}</td>
+    <td style="color:var(--text2)">${fp(s.high20)}</td>
+    <td><div class="vol-bar-wrap"><span style="font-size:11px;font-weight:600;color:${vcol}">${fvr(s.volRatio)}</span><div class="vol-bar-bg"><div class="vol-bar-fill" style="width:${vpct}%;background:${vcol}"></div></div></div></td>
+    <td><span class="sig sig-bd">▼ BD5</span></td>
+  </tr>`;
+}
+
+function emptyRow(msg, cols=9){ return `<tr class="lrow"><td colspan="${cols}">${msg}</td></tr>`; }
+
+function renderBO(mmi) {
+  const loaded = Object.values(sd).filter(s=>s.loaded&&!s.err);
+  const boCandidates = loaded.filter(s => s.high20 && s.price > s.high20);
+  const scored = boCandidates.map(s=>({...s, hits:scoreBO(s,mmi)})).sort((a,b)=>b.hits-a.hits||b.volRatio-a.volRatio);
+  const liq = scored.filter(s=>s.isLiquid);
+  const ill = scored.filter(s=>!s.isLiquid);
+  document.getElementById('bo-count').textContent = scored.length;
+  document.getElementById('bo-liq-cnt').textContent = `(${liq.length})`;
+  document.getElementById('bo-ill-cnt').textContent = `(${ill.length})`;
+  document.getElementById('bo-liq-body').innerHTML = liq.length ? liq.map(s=>rowBO(s,s.hits)).join('') : emptyRow('No liquid BO_20 signals');
+  document.getElementById('bo-ill-body').innerHTML = ill.length ? ill.map(s=>rowBO(s,s.hits)).join('') : emptyRow('No illiquid BO_20 signals');
+}
+
+function renderBD(mmi) {
+  const loaded = Object.values(sd).filter(s=>s.loaded&&!s.err);
+  const bdCandidates = loaded.filter(s => s.low5 && s.price < s.low5);
+  const scored = bdCandidates.map(s=>({...s, hits:scoreBD(s,mmi)})).sort((a,b)=>b.hits-a.hits||b.volRatio-a.volRatio);
+  const liq = scored.filter(s=>s.isLiquid);
+  const ill = scored.filter(s=>!s.isLiquid);
+  document.getElementById('bd-count').textContent = scored.length;
+  document.getElementById('bd-liq-cnt').textContent = `(${liq.length})`;
+  document.getElementById('bd-ill-cnt').textContent = `(${ill.length})`;
+  document.getElementById('bd-liq-body').innerHTML = liq.length ? liq.map(s=>rowBD(s,s.hits)).join('') : emptyRow('No liquid BD5 signals');
+  document.getElementById('bd-ill-body').innerHTML = ill.length ? ill.map(s=>rowBD(s,s.hits)).join('') : emptyRow('No illiquid BD5 signals');
+}
+
+// ── Alerts ──
+function fireNewAlerts(mmi) {
+  const loaded = Object.values(sd).filter(s=>s.loaded&&!s.err);
+  loaded.forEach(s => {
+    const boHit = s.high20 && s.price > s.high20;
+    const bdHit = s.low5 && s.price < s.low5;
+    const key = s.ticker;
+    if (boHit && prevAlerted[key]!=='bo') {
+      prevAlerted[key]='bo';
+      const hits=scoreBO(s,mmi);
+      const alert={time:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), ticker:s.ticker, name:s.name, type:'bo', price:s.price, pct:s.chgPct, hits};
+      al.unshift(alert);
+      logAlertToSupabase(alert); // instantly write to Supabase
+      if(document.getElementById('sndOn').checked) playSound('up');
+    } else if (bdHit && prevAlerted[key]!=='bd') {
+      prevAlerted[key]='bd';
+      const hits=scoreBD(s,mmi);
+      const alert={time:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), ticker:s.ticker, name:s.name, type:'bd', price:s.price, pct:s.chgPct, hits};
+      al.unshift(alert);
+      logAlertToSupabase(alert); // instantly write to Supabase
+      if(document.getElementById('sndOn').checked) playSound('down');
+    } else if (!boHit && !bdHit) {
+      delete prevAlerted[key];
+    }
+  });
+  if(al.length>200) al.length=200;
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const b=document.getElementById('abox');
+  document.getElementById('ac').textContent=al.length+' alert'+(al.length!==1?'s':'');
+  if(!al.length){b.innerHTML='<span class="na">No alerts yet...</span>';return;}
+  b.innerHTML=al.map(a=>`<div class="ai">
+    <span class="at">${a.time}</span>
+    <span class="atag ${a.type==='bo'?'tu':'td2'}">${a.type==='bo'?'▲ BO_20':'▼ BD5'}</span>
+    <strong>${a.ticker.replace('.SI','')}</strong>
+    <span style="color:var(--text2);font-size:11px">${a.name}</span>
+    <span class="hits-badge ${hitsClass(a.hits)}" style="margin-left:4px">${a.hits}</span>
+    <span style="margin-left:auto;font-weight:600;color:${a.type==='bo'?'var(--green)':'var(--red)'}">SGD ${fp(a.price)} (${fpc(a.pct)})</span>
+  </div>`).join('');
+}
+
+// ── Export ──
+function fp2(p){ if(p==null||isNaN(p))return''; return p<1&&p>-1&&p!==0?p.toFixed(3):p.toFixed(2); }
+function exportCSV(mode) {
+  let csv, fn;
+  const mmi = computeMMI();
+  if (mode==='alerts') {
+    if(!al.length){showToast('No alerts yet.');return;}
+    csv='Time,Ticker,Name,Type,Price,Chg%,Hits\n'+al.map(a=>[a.time,a.ticker,`"${a.name}"`,a.type==='bo'?'BO_20':'BD5',fp2(a.price),a.pct!=null?a.pct.toFixed(2):'',a.hits].join(',')).join('\n');
+    fn='sgx_alerts_'+new Date().toISOString().slice(0,10)+'.csv';
+  } else {
+    const loaded=Object.values(sd).filter(s=>s.loaded&&!s.err);
+    const list = mode==='bo' ? loaded.filter(s=>s.high20&&s.price>s.high20).map(s=>({...s,hits:scoreBO(s,mmi)})).sort((a,b)=>b.hits-a.hits)
+                             : loaded.filter(s=>s.low5&&s.price<s.low5).map(s=>({...s,hits:scoreBD(s,mmi)})).sort((a,b)=>b.hits-a.hits);
+    if(!list.length){showToast('No signals to export.');return;}
+    csv='Hits,Ticker,Name,Liquid,Price,Chg%,Last/Open,20D High,5D Low,Vol Ratio(64)\n'+
+      list.map(s=>[s.hits,s.ticker,`"${s.name}"`,s.isLiquid?'Y':'N',fp2(s.price),s.chgPct!=null?s.chgPct.toFixed(2):'',s.lastOpen?s.lastOpen.toFixed(4):'',fp2(s.high20),fp2(s.low5),s.volRatio?s.volRatio.toFixed(2):''].join(',')).join('\n');
+    fn=`sgx_${mode}_${new Date().toISOString().slice(0,10)}.csv`;
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=fn; a.click();
+  showToast('✓ Downloaded '+fn);
+}
+
+// ── Utils ──
+function setStatus(st){
+  const d=document.getElementById('dot'),b=document.getElementById('lbadge');
+  if(st==='live'){d.className='dot';b.className='badge bl';b.textContent='LIVE';}
+  else if(st==='err'){d.className='dot err';b.className='badge be';b.textContent='ERROR';}
+  else{d.className='dot paused';b.className='badge bp';b.textContent='PAUSED';}
+}
+function toggleScan(){
+  running=!running; const btn=document.getElementById('tbtn');
+  if(running){ivl=setInterval(fetchAll,rate);btn.textContent='⏸ Pause';setStatus('live');fetchAll();}
+  else{clearInterval(ivl);btn.textContent='▶ Resume';setStatus('paused');}
+}
+function clearAlerts(){al=[];prevAlerted={};renderAlerts();}
+function setRate(s){rate=s*1000;if(running){clearInterval(ivl);ivl=setInterval(fetchAll,rate);}}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+
+async function addStock(){
+  let t=document.getElementById('ainp').value.trim().toUpperCase();
+  if(!t)return; if(!t.endsWith('.SI'))t+='.SI';
+  if(sd[t]){showToast(t+' already in watchlist.');return;}
+  sd[t]={ticker:t,name:t,loaded:false,err:false}; wl.push({ticker:t,name:t});
+  document.getElementById('ainp').value='';
+  await loadStock(sd[t]); reScan();
+}
+
+loadSbCredsFromStorage();
+loadSyncUrlFromStorage();
+fetchAll();
+ivl=setInterval(fetchAll,rate);
+</script>
+</body>
+</html>
