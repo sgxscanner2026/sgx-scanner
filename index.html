@@ -47,6 +47,15 @@ h1{font-size:19px;font-weight:700;color:var(--text)}
 .mkt-bear{background:var(--red-bg);color:var(--red-dark)}
 .mkt-neut{background:var(--bg2);color:var(--text2)}
 
+/* Market tabs */
+.mkt-tab{font-size:13px;padding:7px 16px;border-radius:var(--radius-sm);border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer;font-family:inherit;font-weight:600}
+.mkt-tab:hover{background:var(--bg2)}
+.mkt-tab.tab-active{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+/* News quick-link icon */
+.news-link{text-decoration:none;font-size:12px;opacity:0.55;margin-left:4px;cursor:pointer}
+.news-link:hover{opacity:1}
+
 /* Controls */
 .ctrl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .ts{font-size:12px;color:var(--text3);margin-right:auto}
@@ -166,9 +175,13 @@ tr.top-hit:hover{background:#fef3c7}
 
   <div class="hdr">
     <div class="dot" id="dot"></div>
-    <h1>SGX Breakout Scanner</h1>
+    <h1 id="h1title">Singapore (SGX) Breakout Scanner</h1>
     <span class="badge bl" id="lbadge">LIVE</span>
     <span class="badge by">~15 min delay · Yahoo Finance</span>
+  </div>
+  <div class="mkt-tabs" style="display:flex;gap:6px;margin-bottom:10px">
+    <button id="tab-sgx" class="mkt-tab tab-active" onclick="switchMarket('SGX')">🇸🇬 Singapore (SGX)</button>
+    <button id="tab-set" class="mkt-tab" onclick="switchMarket('SET')">🇹🇭 Thailand (SET)</button>
   </div>
   <p style="font-size:12px;color:var(--text3);margin-bottom:14px">BO_20 breakout · BD5 breakdown · MMI market filter · Volume ratio · Liquidity split</p>
 
@@ -267,7 +280,7 @@ tr.top-hit:hover{background:#fef3c7}
     <label>BD lookback (days): <input type="number" id="bd-days" value="5" min="2" max="20" onchange="reScan()"> </label>
     <label>Vol ratio min: <input type="range" min="1" max="5" step="0.25" value="1.5" oninput="document.getElementById('vr-v').textContent=this.value+'x';volMin=parseFloat(this.value);reScan()"><span class="v" id="vr-v">1.5x</span></label>
     <label>Min chg%: <input type="range" min="0" max="5" step="0.25" value="0" oninput="document.getElementById('mc-v').textContent=this.value+'%';minChg=parseFloat(this.value);reScan()"><span class="v" id="mc-v">0%</span></label>
-    <label>Liquid min (SGD k/day): <input type="number" id="liq-min" value="100" min="0" onchange="reScan()"> </label>
+    <label><span id="liq-label-txt">Liquid min (SGD k/day)</span>: <input type="number" id="liq-min" value="100" min="0" onchange="reScan()"> </label>
     <label>Auto-refresh: <input type="range" min="60" max="300" step="30" value="60" oninput="document.getElementById('rr-v').textContent=this.value+'s';setRate(parseInt(this.value))"><span class="v" id="rr-v">60s</span></label>
   </div>
 
@@ -313,13 +326,13 @@ tr.top-hit:hover{background:#fef3c7}
 
   <!-- Add stock -->
   <div class="add-row">
-    <input type="text" id="ainp" placeholder="e.g. G13.SI" maxlength="12" onkeydown="if(event.key==='Enter')addStock()">
+    <input type="text" id="ainp" placeholder="e.g. G13" maxlength="12" onkeydown="if(event.key==='Enter')addStock()">
     <button onclick="addStock()">+ Add stock</button>
-    <span class="hint">SGX ticker — .SI added automatically</span>
+    <span class="hint" id="ainp-hint">SGX ticker — .SI added automatically</span>
   </div>
 
-  <div class="footer">
-    SGX Breakout Scanner · Yahoo Finance ~15 min delay · MMI computed from watchlist · For informational use only, not financial advice
+  <div class="footer" id="footer-txt">
+    Singapore (SGX) Breakout Scanner · Yahoo Finance ~15 min delay · MMI computed from watchlist · For informational use only, not financial advice
   </div>
 </div>
 <div id="toast"></div>
@@ -362,8 +375,8 @@ async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
   throw new Error('All proxies failed for '+ticker);
 }
 
-// ── Watchlist (top ~140 liquid SGX counters by market cap) ──
-const DEFAULT_WL = [
+// ── Watchlist: Singapore (SGX) — top ~140 liquid counters by market cap ──
+const DEFAULT_WL_SGX = [
   {ticker:'D05.SI',name:'DBS Group'},
   {ticker:'O39.SI',name:'OCBC Bank'},
   {ticker:'U11.SI',name:'UOB'},
@@ -505,13 +518,165 @@ const DEFAULT_WL = [
   {ticker:'BBW.SI',name:'Azeus Systems Holdings'}
 ];
 
-let wl = [...DEFAULT_WL];
+// ── Watchlist: Thailand (SET100) — verified 2 Jul 2026, Pi Securities Technical Daily ──
+const DEFAULT_WL_SET = [
+  {ticker:'AAV.BK',name:'Asia Aviation'},
+  {ticker:'ADVANC.BK',name:'Advanced Info Service'},
+  {ticker:'AEONTS.BK',name:'Aeon Thana Sinsap'},
+  {ticker:'AMATA.BK',name:'Amata Corporation'},
+  {ticker:'AOT.BK',name:'Airports of Thailand'},
+  {ticker:'AP.BK',name:'AP (Thailand)'},
+  {ticker:'AURA.BK',name:'Aurora Design'},
+  {ticker:'AWC.BK',name:'Asset World Corp'},
+  {ticker:'BA.BK',name:'Bangkok Airways'},
+  {ticker:'BAM.BK',name:'Bangkok Commercial AMC'},
+  {ticker:'BANPU.BK',name:'Banpu'},
+  {ticker:'BBL.BK',name:'Bangkok Bank'},
+  {ticker:'BCH.BK',name:'Bangkok Chain Hospital'},
+  {ticker:'BCP.BK',name:'Bangchak Corporation'},
+  {ticker:'BCPG.BK',name:'BCPG'},
+  {ticker:'BDMS.BK',name:'Bangkok Dusit Medical Services'},
+  {ticker:'BEM.BK',name:'Bangkok Expressway & Metro'},
+  {ticker:'BGRIM.BK',name:'B.Grimm Power'},
+  {ticker:'BH.BK',name:'Bumrungrad Hospital'},
+  {ticker:'BJC.BK',name:'Berli Jucker'},
+  {ticker:'BLA.BK',name:'Bangkok Life Assurance'},
+  {ticker:'BTG.BK',name:'Betagro'},
+  {ticker:'BTS.BK',name:'BTS Group Holdings'},
+  {ticker:'CBG.BK',name:'Carabao Group'},
+  {ticker:'CCET.BK',name:'Cal-Comp Electronics'},
+  {ticker:'CENTEL.BK',name:'Central Plaza Hotel'},
+  {ticker:'CHG.BK',name:'Chularat Hospital'},
+  {ticker:'CK.BK',name:'CH. Karnchang'},
+  {ticker:'COM7.BK',name:'COM7'},
+  {ticker:'CPALL.BK',name:'CP All'},
+  {ticker:'CPF.BK',name:'Charoen Pokphand Foods'},
+  {ticker:'CPN.BK',name:'Central Pattana'},
+  {ticker:'CRC.BK',name:'Central Retail Corporation'},
+  {ticker:'DELTA.BK',name:'Delta Electronics Thailand'},
+  {ticker:'DOHOME.BK',name:'Dohome'},
+  {ticker:'EA.BK',name:'Energy Absolute'},
+  {ticker:'EGCO.BK',name:'Electricity Generating'},
+  {ticker:'ERW.BK',name:'The Erawan Group'},
+  {ticker:'GFPT.BK',name:'GFPT'},
+  {ticker:'GLOBAL.BK',name:'Siam Global House'},
+  {ticker:'GPSC.BK',name:'Global Power Synergy'},
+  {ticker:'GULF.BK',name:'Gulf Energy Development'},
+  {ticker:'GUNKUL.BK',name:'Gunkul Engineering'},
+  {ticker:'HANA.BK',name:'Hana Microelectronics'},
+  {ticker:'HMPRO.BK',name:'Home Product Center'},
+  {ticker:'ICHI.BK',name:'Ichitan Group'},
+  {ticker:'IRPC.BK',name:'IRPC'},
+  {ticker:'IVL.BK',name:'Indorama Ventures'},
+  {ticker:'JMT.BK',name:'JMT Network Services'},
+  {ticker:'JTS.BK',name:'Jasmine Technology Solution'},
+  {ticker:'KBANK.BK',name:'Kasikornbank'},
+  {ticker:'KCE.BK',name:'KCE Electronics'},
+  {ticker:'KKP.BK',name:'Kiatnakin Phatra Bank'},
+  {ticker:'KTB.BK',name:'Krung Thai Bank'},
+  {ticker:'KTC.BK',name:'Krungthai Card'},
+  {ticker:'LH.BK',name:'Land and Houses'},
+  {ticker:'M.BK',name:'MK Restaurants'},
+  {ticker:'MEGA.BK',name:'Mega Lifesciences'},
+  {ticker:'MINT.BK',name:'Minor International'},
+  {ticker:'MOSHI.BK',name:'Moshi Moshi Retail'},
+  {ticker:'MRDIYT.BK',name:'MR DIY Thailand'},
+  {ticker:'MTC.BK',name:'Muangthai Capital'},
+  {ticker:'OR.BK',name:'PTT Oil and Retail Business'},
+  {ticker:'OSP.BK',name:'Osotspa'},
+  {ticker:'PLANB.BK',name:'Plan B Media'},
+  {ticker:'PR9.BK',name:'Praram 9 Hospital'},
+  {ticker:'PRM.BK',name:'Prima Marine'},
+  {ticker:'PTG.BK',name:'PTG Energy'},
+  {ticker:'PTT.BK',name:'PTT'},
+  {ticker:'PTTEP.BK',name:'PTT Exploration & Production'},
+  {ticker:'PTTGC.BK',name:'PTT Global Chemical'},
+  {ticker:'QH.BK',name:'Quality Houses'},
+  {ticker:'RATCH.BK',name:'Ratch Group'},
+  {ticker:'RCL.BK',name:'Regional Container Lines'},
+  {ticker:'SAWAD.BK',name:'Srisawad Corporation'},
+  {ticker:'SCB.BK',name:'Siam Commercial Bank (SCBX)'},
+  {ticker:'SCC.BK',name:'Siam Cement'},
+  {ticker:'SCGP.BK',name:'SCG Packaging'},
+  {ticker:'SIRI.BK',name:'Sansiri'},
+  {ticker:'SPALI.BK',name:'Supalai'},
+  {ticker:'SPRC.BK',name:'Star Petroleum Refining'},
+  {ticker:'STA.BK',name:'Sri Trang Agro-Industry'},
+  {ticker:'STECON.BK',name:'STECON Group'},
+  {ticker:'STGT.BK',name:'Sri Trang Gloves'},
+  {ticker:'TASCO.BK',name:'Tipco Asphalt'},
+  {ticker:'TCAP.BK',name:'Thanachart Capital'},
+  {ticker:'TFG.BK',name:'Thaifoods Group'},
+  {ticker:'THAI.BK',name:'Thai Airways International'},
+  {ticker:'THCOM.BK',name:'Thaicom'},
+  {ticker:'TIDLOR.BK',name:'Ngern Tid Lor'},
+  {ticker:'TISCO.BK',name:'Tisco Financial Group'},
+  {ticker:'TLI.BK',name:'Thai Life Insurance'},
+  {ticker:'TOA.BK',name:'TOA Paint'},
+  {ticker:'TOP.BK',name:'Thai Oil'},
+  {ticker:'TRUE.BK',name:'True Corporation'},
+  {ticker:'TTB.BK',name:'TMBThanachart Bank'},
+  {ticker:'TU.BK',name:'Thai Union Group'},
+  {ticker:'VGI.BK',name:'VGI'},
+  {ticker:'WHA.BK',name:'WHA Corporation'},
+  {ticker:'WHAUP.BK',name:'WHA Utilities and Power'}
+];
+
+// ── Market configuration ──
+const MARKETS = {
+  SGX: { suffix:'.SI', currency:'SGD', locale:'en-SG', tz:'SGT', label:'Singapore (SGX)', short:'SGX', wl:DEFAULT_WL_SGX, liqDefault:100 },
+  SET: { suffix:'.BK', currency:'THB', locale:'en-TH', tz:'ICT', label:'Thailand (SET)',   short:'SET', wl:DEFAULT_WL_SET, liqDefault:3000 }
+};
+let currentMarket = 'SGX';
+
+let wl = [...MARKETS[currentMarket].wl];
 let sd = {};   // stock data keyed by ticker
 let al = [];   // alert log
 let volMin = 1.5, minChg = 0, running = true, ivl = null, rate = 60000, actx = null, vol = 0.6;
 let prevAlerted = {};
 
 wl.forEach(s => { sd[s.ticker] = {...s, loaded:false, err:false}; });
+
+// ── Switch between SGX and Thailand (SET) ──
+// Per the "only active tab scans" choice: switching stops the current market's
+// polling loop, clears its in-memory data, loads the other market's watchlist,
+// and starts fetching that one instead. Nothing from the previous market keeps
+// running in the background.
+function switchMarket(mkt) {
+  if (mkt === currentMarket) return;
+  clearInterval(ivl);
+  currentMarket = mkt;
+  const cfg = MARKETS[mkt];
+
+  wl = [...cfg.wl];
+  sd = {};
+  wl.forEach(s => { sd[s.ticker] = {...s, loaded:false, err:false}; });
+  al = [];
+  prevAlerted = {};
+  canonicalMMI = null;
+  canonicalBO = null;
+  canonicalBD = null;
+  localMMIData = null;
+
+  // Update UI chrome for the new market
+  document.getElementById('tab-sgx').classList.toggle('tab-active', mkt==='SGX');
+  document.getElementById('tab-set').classList.toggle('tab-active', mkt==='SET');
+  document.getElementById('h1title').textContent = cfg.label+' Breakout Scanner';
+  document.getElementById('liq-label-txt').textContent = 'Liquid min ('+cfg.currency+' k/day)';
+  document.getElementById('liq-min').value = cfg.liqDefault;
+  document.getElementById('ainp').placeholder = 'e.g. '+(mkt==='SGX'?'G13':'PTT');
+  document.getElementById('ainp-hint').textContent = cfg.short+' ticker — '+cfg.suffix+' added automatically';
+  document.getElementById('footer-txt').textContent = cfg.label+' Breakout Scanner · Yahoo Finance ~15 min delay · MMI computed from watchlist · For informational use only, not financial advice';
+
+  renderAlerts();
+  document.getElementById('bo-liq-body').innerHTML = emptyRow('Loading...');
+  document.getElementById('bo-ill-body').innerHTML = emptyRow('Loading...');
+  document.getElementById('bd-liq-body').innerHTML = emptyRow('Loading...');
+  document.getElementById('bd-ill-body').innerHTML = emptyRow('Loading...');
+
+  fetchAll();
+  ivl = setInterval(fetchAll, rate);
+}
 
 // ── Audio ──
 function getACtx() {
@@ -670,7 +835,7 @@ async function fetchAll() {
   await Promise.all(wl.map(s => loadStock(s)));
   reScan();
   const n = new Date();
-  document.getElementById('ts').textContent = 'Last updated: '+n.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · SGT';
+  document.getElementById('ts').textContent = 'Last updated: '+n.toLocaleTimeString(MARKETS[currentMarket].locale,{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · '+MARKETS[currentMarket].tz;
   const anyErr = Object.values(sd).some(s=>s.err);
   const anyLoaded = Object.values(sd).some(s=>s.loaded);
   setStatus(anyLoaded ? (anyErr ? 'live' : 'live') : 'err');
@@ -784,20 +949,22 @@ async function syncToSupabase(silent) {
     const loaded = Object.values(sd).filter(s => s.loaded && !s.err);
 
     // 1. Upsert this laptop's stock readings into shared pool (merge by ticker)
+    //    Tagged with `market` so SGX and Thailand rows never mix into one MMI.
     const stockRows = loaded.map(s => ({
       ticker: s.ticker, name: s.name,
       price: s.price, chg_pct: s.chgPct,
       vol_ratio: s.volRatio, last_open: s.lastOpen,
       high20: s.high20, low5: s.low5,
       liquid: s.isLiquid, laptop: laptopId,
+      market: currentMarket,
       updated_at: new Date().toISOString()
     }));
     if (stockRows.length > 0) {
       await sbRequest('stock_pool', 'POST', stockRows);
     }
 
-    // 2. Read back the FULL merged pool (all devices' readings combined)
-    const pool = await sbRequest('stock_pool?select=*', 'GET');
+    // 2. Read back the merged pool for THIS market only (all devices' readings combined)
+    const pool = await sbRequest('stock_pool?select=*&market=eq.'+currentMarket, 'GET');
     const fullPool = pool || [];
 
     // 3. Compute canonical MMI from full merged pool
@@ -812,7 +979,8 @@ async function syncToSupabase(silent) {
         mmi: canonical.mmi, mmisi: canonical.mmisi,
         mmi_n: canonical.mmiN, mmi_s: canonical.mmiS,
         advancers: canonical.adv, decliners: canonical.dec,
-        total_stocks: canonical.total, laptop: laptopId
+        total_stocks: canonical.total, laptop: laptopId,
+        market: currentMarket
       }]);
       canonicalMMI = canonical;
       updateMMICards(canonical, true);
@@ -851,7 +1019,8 @@ async function logAlertToSupabase(alert) {
       ticker: alert.ticker, name: alert.name,
       alert_type: alert.type === 'bo' ? 'BO_20' : 'BD5',
       price: alert.price, chg_pct: alert.pct,
-      hits: alert.hits, laptop: getLaptopId()
+      hits: alert.hits, laptop: getLaptopId(),
+      market: currentMarket
     }]);
   } catch(e) {}
 }
@@ -954,7 +1123,7 @@ function rowBOPool(s) {
   const lo = s.last_open ? s.last_open.toFixed(4) : '—';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
-    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
     <td><strong>${fp(s.price)}</strong></td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.last_open&&s.last_open>1?'up':s.last_open&&s.last_open<1?'dn':'nt'}">${lo}</td>
@@ -975,7 +1144,7 @@ function rowBDPool(s) {
   const lo = s.last_open ? s.last_open.toFixed(4) : '—';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
-    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
     <td><strong>${fp(s.price)}</strong></td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.last_open&&s.last_open<1?'dn':s.last_open&&s.last_open>1?'up':'nt'}">${lo}</td>
@@ -1097,6 +1266,7 @@ async function syncToSheet(silent) {
       type: 'snapshot',
       time: new Date().toISOString(),
       laptop: getLaptopId(),
+      market: currentMarket,
       // Send ALL individual stock readings so Sheet can compute MMI from the union
       // of stocks successfully loaded across BOTH laptops
       stockReadings: loaded.map(s=>({
@@ -1157,10 +1327,13 @@ function maybeAutoSync() {
   const bucket = Math.floor(now.getTime() / 300000); // every 5 min
   if (bucket !== lastAutoSyncMinute) {
     lastAutoSyncMinute = bucket;
-    // Supabase: primary sync (works on both laptops)
+    // Supabase: primary sync (works on both laptops) — safe for both markets,
+    // rows are tagged and filtered by `market` so SGX and Thailand never mix.
     if (sbUrl && sbKey) syncToSupabase(true);
-    // Google Sheets: backup archive (Lenovo only — will silently fail on HP)
-    if (sheetSyncUrl) syncToSheet(true);
+    // Google Sheets: backup archive — only auto-runs for SGX for now, since the
+    // Apps Script side doesn't yet separate markets. Ask Claude to update the
+    // script when you're ready to archive Thailand data too.
+    if (sheetSyncUrl && currentMarket === 'SGX') syncToSheet(true);
   }
 }
 
@@ -1248,7 +1421,7 @@ function rowBO(s, hitsN) {
   const illiq=!s.isLiquid?`<span class="illiq-label">illiq</span>`:'';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
-    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
     <td><strong>${fp(s.price)}</strong></td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.lastOpen&&s.lastOpen>1?'up':s.lastOpen&&s.lastOpen<1?'dn':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
@@ -1268,7 +1441,7 @@ function rowBD(s, hitsN) {
   const illiq=!s.isLiquid?`<span class="illiq-label">illiq</span>`:'';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
-    <td><span class="tk">${s.ticker.replace('.SI','')}${illiq}<span class="tn">${s.name}</span></span></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
     <td><strong>${fp(s.price)}</strong></td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.lastOpen&&s.lastOpen<1?'dn':s.lastOpen&&s.lastOpen>1?'up':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
@@ -1343,10 +1516,11 @@ function renderAlerts() {
   b.innerHTML=al.map(a=>`<div class="ai">
     <span class="at">${a.time}</span>
     <span class="atag ${a.type==='bo'?'tu':'td2'}">${a.type==='bo'?'▲ BO_20':'▼ BD5'}</span>
-    <strong>${a.ticker.replace('.SI','')}</strong>
+    <strong>${a.ticker.replace(MARKETS[currentMarket].suffix,'')}</strong>
+    <a href="https://finance.yahoo.com/quote/${a.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News" onclick="event.stopPropagation()">📰</a>
     <span style="color:var(--text2);font-size:11px">${a.name}</span>
     <span class="hits-badge ${hitsClass(a.hits)}" style="margin-left:4px">${a.hits}</span>
-    <span style="margin-left:auto;font-weight:600;color:${a.type==='bo'?'var(--green)':'var(--red)'}">SGD ${fp(a.price)} (${fpc(a.pct)})</span>
+    <span style="margin-left:auto;font-weight:600;color:${a.type==='bo'?'var(--green)':'var(--red)'}">${MARKETS[currentMarket].currency} ${fp(a.price)} (${fpc(a.pct)})</span>
   </div>`).join('');
 }
 
@@ -1358,7 +1532,7 @@ function exportCSV(mode) {
   if (mode==='alerts') {
     if(!al.length){showToast('No alerts yet.');return;}
     csv='Time,Ticker,Name,Type,Price,Chg%,Hits\n'+al.map(a=>[a.time,a.ticker,`"${a.name}"`,a.type==='bo'?'BO_20':'BD5',fp2(a.price),a.pct!=null?a.pct.toFixed(2):'',a.hits].join(',')).join('\n');
-    fn='sgx_alerts_'+new Date().toISOString().slice(0,10)+'.csv';
+    fn=MARKETS[currentMarket].short.toLowerCase()+'_alerts_'+new Date().toISOString().slice(0,10)+'.csv';
   } else {
     const loaded=Object.values(sd).filter(s=>s.loaded&&!s.err);
     const list = mode==='bo' ? loaded.filter(s=>s.high20&&s.price>s.high20).map(s=>({...s,hits:scoreBO(s,mmi)})).sort((a,b)=>b.hits-a.hits)
@@ -1366,7 +1540,7 @@ function exportCSV(mode) {
     if(!list.length){showToast('No signals to export.');return;}
     csv='Hits,Ticker,Name,Liquid,Price,Chg%,Last/Open,20D High,5D Low,Vol Ratio(64)\n'+
       list.map(s=>[s.hits,s.ticker,`"${s.name}"`,s.isLiquid?'Y':'N',fp2(s.price),s.chgPct!=null?s.chgPct.toFixed(2):'',s.lastOpen?s.lastOpen.toFixed(4):'',fp2(s.high20),fp2(s.low5),s.volRatio?s.volRatio.toFixed(2):''].join(',')).join('\n');
-    fn=`sgx_${mode}_${new Date().toISOString().slice(0,10)}.csv`;
+    fn=`${MARKETS[currentMarket].short.toLowerCase()}_${mode}_${new Date().toISOString().slice(0,10)}.csv`;
   }
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=fn; a.click();
   showToast('✓ Downloaded '+fn);
@@ -1390,7 +1564,8 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 
 async function addStock(){
   let t=document.getElementById('ainp').value.trim().toUpperCase();
-  if(!t)return; if(!t.endsWith('.SI'))t+='.SI';
+  const suf = MARKETS[currentMarket].suffix;
+  if(!t)return; if(!t.endsWith(suf))t+=suf;
   if(sd[t]){showToast(t+' already in watchlist.');return;}
   sd[t]={ticker:t,name:t,loaded:false,err:false}; wl.push({ticker:t,name:t});
   document.getElementById('ainp').value='';
