@@ -633,9 +633,21 @@ let wl = [...MARKETS[currentMarket].wl];
 let sd = {};   // stock data keyed by ticker
 let al = [];   // alert log
 let volMin = 1.5, minChg = 0, running = true, ivl = null, rate = 60000, actx = null, vol = 0.6;
-let prevAlerted = {};
+let prevAlerted = loadPrevAlerted(currentMarket);
 
 wl.forEach(s => { sd[s.ticker] = {...s, loaded:false, err:false}; });
+
+// ── Persist prevAlerted per market so a page reload or tab switch doesn't
+//    re-fire (and re-log to Supabase) alerts for stocks already breaking out ──
+function loadPrevAlerted(mkt) {
+  try {
+    const raw = window.localStorage.getItem('sgx_prev_alerted_' + mkt);
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) { return {}; }
+}
+function savePrevAlerted(mkt, obj) {
+  try { window.localStorage.setItem('sgx_prev_alerted_' + mkt, JSON.stringify(obj)); } catch(e) {}
+}
 
 // ── Switch between SGX and Thailand (SET) ──
 // Per the "only active tab scans" choice: switching stops the current market's
@@ -652,7 +664,7 @@ function switchMarket(mkt) {
   sd = {};
   wl.forEach(s => { sd[s.ticker] = {...s, loaded:false, err:false}; });
   al = [];
-  prevAlerted = {};
+  prevAlerted = loadPrevAlerted(mkt);
   canonicalMMI = null;
   canonicalBO = null;
   canonicalBD = null;
@@ -1489,6 +1501,7 @@ function fireNewAlerts(mmi) {
     const key = s.ticker;
     if (boHit && prevAlerted[key]!=='bo') {
       prevAlerted[key]='bo';
+      savePrevAlerted(currentMarket, prevAlerted);
       const hits=scoreBO(s,mmi);
       const alert={time:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), ticker:s.ticker, name:s.name, type:'bo', price:s.price, pct:s.chgPct, hits};
       al.unshift(alert);
@@ -1496,13 +1509,14 @@ function fireNewAlerts(mmi) {
       if(document.getElementById('sndOn').checked) playSound('up');
     } else if (bdHit && prevAlerted[key]!=='bd') {
       prevAlerted[key]='bd';
+      savePrevAlerted(currentMarket, prevAlerted);
       const hits=scoreBD(s,mmi);
       const alert={time:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), ticker:s.ticker, name:s.name, type:'bd', price:s.price, pct:s.chgPct, hits};
       al.unshift(alert);
       logAlertToSupabase(alert); // instantly write to Supabase
       if(document.getElementById('sndOn').checked) playSound('down');
     } else if (!boHit && !bdHit) {
-      delete prevAlerted[key];
+      if (prevAlerted[key]) { delete prevAlerted[key]; savePrevAlerted(currentMarket, prevAlerted); }
     }
   });
   if(al.length>200) al.length=200;
@@ -1558,7 +1572,7 @@ function toggleScan(){
   if(running){ivl=setInterval(fetchAll,rate);btn.textContent='⏸ Pause';setStatus('live');fetchAll();}
   else{clearInterval(ivl);btn.textContent='▶ Resume';setStatus('paused');}
 }
-function clearAlerts(){al=[];prevAlerted={};renderAlerts();}
+function clearAlerts(){al=[];renderAlerts();}
 function setRate(s){rate=s*1000;if(running){clearInterval(ivl);ivl=setInterval(fetchAll,rate);}}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
 
