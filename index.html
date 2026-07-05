@@ -808,7 +808,7 @@ function savePrevAlerted(mkt, obj) {
 // polling loop, clears its in-memory data, loads the other market's watchlist,
 // and starts fetching that one instead. Nothing from the previous market keeps
 // running in the background.
-function switchMarket(mkt) {
+async function switchMarket(mkt) {
   if (mkt === currentMarket) return;
   clearInterval(ivl);
   currentMarket = mkt;
@@ -844,7 +844,9 @@ function switchMarket(mkt) {
   document.getElementById('bd-liq-body').innerHTML = emptyRow('Loading...');
   document.getElementById('bd-ill-body').innerHTML = emptyRow('Loading...');
 
-  fetchAll();
+  await fetchAll();
+  if (sbUrl && sbKey) syncToSupabase(true);
+  if (sheetSyncUrl) syncToSheet(true);
   ivl = setInterval(fetchAll, rate);
 }
 
