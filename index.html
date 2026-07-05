@@ -52,6 +52,11 @@ h1{font-size:19px;font-weight:700;color:var(--text)}
 .mkt-tab:hover{background:var(--bg2)}
 .mkt-tab.tab-active{background:var(--text);color:var(--bg);border-color:var(--text)}
 
+/* Index quote strip */
+.idx-pill{font-size:12px;padding:5px 12px;border-radius:var(--radius-sm);border:0.5px solid var(--border2);background:var(--surface-2,var(--bg2));font-weight:600;white-space:nowrap}
+.idx-pill.up{color:var(--green)}
+.idx-pill.down{color:var(--red)}
+
 /* News quick-link icon */
 .news-link{text-decoration:none;font-size:12px;opacity:0.55;margin-left:4px;cursor:pointer}
 .news-link:hover{opacity:1}
@@ -185,7 +190,19 @@ tr.top-hit:hover{background:#fef3c7}
     <button data-mkt="HSI" class="mkt-tab" onclick="switchMarket('HSI')">🇭🇰 Hong Kong (HSI)</button>
     <button data-mkt="HSTECH" class="mkt-tab" onclick="switchMarket('HSTECH')">🇭🇰 Hong Kong (HSTECH)</button>
   </div>
+  <div id="idx-strip" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <span class="idx-pill" id="idx-STI">STI —</span>
+    <span class="idx-pill" id="idx-SETI">SET Index —</span>
+    <span class="idx-pill" id="idx-HSI">HSI —</span>
+    <span class="idx-pill" id="idx-HSTECH">HSTECH —</span>
+  </div>
   <p style="font-size:12px;color:var(--text3);margin-bottom:14px">BO_20 breakout · BD5 breakdown · MMI market filter · Volume ratio · Liquidity split</p>
+  <div id="index-banner" style="display:flex;align-items:baseline;gap:10px;padding:8px 14px;border-radius:var(--radius-sm,8px);background:var(--bg2,#f5f5f5);margin-bottom:14px;font-size:13px">
+    <span id="index-name" style="font-weight:600">Straits Times Index</span>
+    <span id="index-price">—</span>
+    <span id="index-chg">—</span>
+    <span style="margin-left:auto;color:var(--text3);font-size:11px" id="index-time"></span>
+  </div>
 
   <div class="proxy-bar" id="proxy-bar">⚡ Connecting to Yahoo Finance...</div>
 
@@ -759,10 +776,10 @@ const DEFAULT_WL_HSTECH = [
 
 // ── Market configuration ──
 const MARKETS = {
-  SGX: { suffix:'.SI', currency:'SGD', locale:'en-SG', tz:'SGT', label:'Singapore (SGX)', short:'SGX', wl:DEFAULT_WL_SGX, liqDefault:100 },
-  SET: { suffix:'.BK', currency:'THB', locale:'en-TH', tz:'ICT', label:'Thailand (SET)',   short:'SET', wl:DEFAULT_WL_SET, liqDefault:3000 },
-  HSI: { suffix:'.HK', currency:'HKD', locale:'en-HK', tz:'HKT', label:'Hong Kong (HSI)',  short:'HSI', wl:DEFAULT_WL_HSI, liqDefault:2000 },
-  HSTECH: { suffix:'.HK', currency:'HKD', locale:'en-HK', tz:'HKT', label:'Hong Kong (HSTECH)', short:'HSTECH', wl:DEFAULT_WL_HSTECH, liqDefault:2000 }
+  SGX: { suffix:'.SI', currency:'SGD', locale:'en-SG', tz:'SGT', label:'Singapore (SGX)', short:'SGX', wl:DEFAULT_WL_SGX, liqDefault:100, indexTicker:'^STI', indexName:'Straits Times Index' },
+  SET: { suffix:'.BK', currency:'THB', locale:'en-TH', tz:'ICT', label:'Thailand (SET)',   short:'SET', wl:DEFAULT_WL_SET, liqDefault:3000, indexTicker:'^SET.BK', indexName:'SET Index' },
+  HSI: { suffix:'.HK', currency:'HKD', locale:'en-HK', tz:'HKT', label:'Hong Kong (HSI)',  short:'HSI', wl:DEFAULT_WL_HSI, liqDefault:2000, indexTicker:'^HSI', indexName:'Hang Seng Index' },
+  HSTECH: { suffix:'.HK', currency:'HKD', locale:'en-HK', tz:'HKT', label:'Hong Kong (HSTECH)', short:'HSTECH', wl:DEFAULT_WL_HSTECH, liqDefault:2000, indexTicker:'HSTECH.HK', indexName:'Hang Seng TECH Index' }
 };
 let currentMarket = 'SGX';
 
@@ -817,6 +834,9 @@ function switchMarket(mkt) {
   document.getElementById('ainp').placeholder = 'e.g. '+(mkt==='SGX'?'G13':'PTT');
   document.getElementById('ainp-hint').textContent = cfg.short+' ticker — '+cfg.suffix+' added automatically';
   document.getElementById('footer-txt').textContent = cfg.label+' Breakout Scanner · Yahoo Finance ~15 min delay · MMI computed from watchlist · For informational use only, not financial advice';
+  renderIndexBanner(cfg, null, null, null);
+  document.getElementById('index-price').textContent = 'Loading...';
+  document.getElementById('index-chg').textContent = '';
 
   renderAlerts();
   document.getElementById('bo-liq-body').innerHTML = emptyRow('Loading...');
@@ -909,7 +929,39 @@ async function loadStock(s) {
   }
 }
 
-// ── MMI calculation ──
+// ── Index quote banner (STI / SET Index / HSI / HSTECH) ──
+async function fetchIndexQuote() {
+  const cfg = MARKETS[currentMarket];
+  try {
+    const res = await fetchWithProxy(cfg.indexTicker, '?interval=1d&range=5d');
+    const meta = res.meta;
+    if (!meta) throw new Error('no index meta');
+    const price = meta.regularMarketPrice;
+    const prevClose = meta.chartPreviousClose || meta.previousClose;
+    const chg = (price!=null && prevClose) ? price - prevClose : null;
+    const chgPct = (chg!=null && prevClose) ? chg/prevClose*100 : null;
+    renderIndexBanner(cfg, price, chg, chgPct);
+  } catch(e) {
+    renderIndexBanner(cfg, null, null, null);
+  }
+}
+
+function renderIndexBanner(cfg, price, chg, chgPct) {
+  document.getElementById('index-name').textContent = cfg.indexName;
+  const priceEl = document.getElementById('index-price');
+  const chgEl = document.getElementById('index-chg');
+  if (price == null) {
+    priceEl.textContent = '—';
+    chgEl.textContent = 'unavailable';
+    chgEl.style.color = 'var(--text3)';
+  } else {
+    priceEl.textContent = price.toLocaleString(cfg.locale, {minimumFractionDigits:2, maximumFractionDigits:2});
+    const up = chg >= 0;
+    chgEl.textContent = (up?'+':'') + chg.toFixed(2) + ' (' + (up?'+':'') + chgPct.toFixed(2) + '%)';
+    chgEl.style.color = up ? 'var(--green,#0a0)' : 'var(--red,#c00)';
+  }
+  document.getElementById('index-time').textContent = 'as of ' + new Date().toLocaleTimeString(cfg.locale,{hour:'2-digit',minute:'2-digit'}) + ' · ' + cfg.tz;
+}
 function computeMMI() {
   const loaded = Object.values(sd).filter(s=>s.loaded&&!s.err);
   if (!loaded.length) return null;
@@ -982,7 +1034,7 @@ function reScan() {
 async function fetchAll() {
   setStatus('live');
   document.getElementById('ts').textContent = 'Refreshing...';
-  await Promise.all(wl.map(s => loadStock(s)));
+  await Promise.all([...wl.map(s => loadStock(s)), fetchIndexQuote()]);
   reScan();
   const n = new Date();
   document.getElementById('ts').textContent = 'Last updated: '+n.toLocaleTimeString(MARKETS[currentMarket].locale,{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · '+MARKETS[currentMarket].tz;
@@ -1724,10 +1776,44 @@ async function addStock(){
   await loadStock(sd[t]); reScan();
 }
 
+// ── Market index quotes (STI, SET Index, HSI, HSTECH) — shown regardless of active tab ──
+const INDEX_TICKERS = {
+  STI: '^STI',
+  SETI: '^SET.BK',
+  HSI: '^HSI',
+  HSTECH: 'HSTECH.HK'
+};
+
+async function fetchIndices() {
+  for (const [key, ticker] of Object.entries(INDEX_TICKERS)) {
+    try {
+      const res = await fetchWithProxy(ticker, '?interval=1d&range=5d');
+      const meta = res.meta;
+      if (!meta) throw new Error('no meta');
+      const price = meta.regularMarketPrice;
+      const prevClose = meta.chartPreviousClose || meta.previousClose;
+      const chgPct = (price!=null && prevClose) ? (price-prevClose)/prevClose*100 : null;
+      const el = document.getElementById('idx-'+key);
+      if (el && price != null) {
+        const sign = chgPct>=0 ? '+' : '';
+        el.textContent = key.replace('SETI','SET Index') + ': ' + price.toLocaleString(undefined,{maximumFractionDigits:2})
+          + (chgPct!=null ? ' ('+sign+chgPct.toFixed(2)+'%)' : '');
+        el.classList.toggle('up', chgPct>0);
+        el.classList.toggle('down', chgPct<0);
+      }
+    } catch(e) {
+      const el = document.getElementById('idx-'+key);
+      if (el) el.textContent = key.replace('SETI','SET Index') + ': —';
+    }
+  }
+}
+
 loadSbCredsFromStorage();
 loadSyncUrlFromStorage();
 fetchAll();
 ivl=setInterval(fetchAll,rate);
+fetchIndices();
+setInterval(fetchIndices, 60000); // refresh indices every 60s, independent of active market tab
 </script>
 </body>
 </html>
