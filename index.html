@@ -179,9 +179,11 @@ tr.top-hit:hover{background:#fef3c7}
     <span class="badge bl" id="lbadge">LIVE</span>
     <span class="badge by">~15 min delay · Yahoo Finance</span>
   </div>
-  <div class="mkt-tabs" style="display:flex;gap:6px;margin-bottom:10px">
-    <button id="tab-sgx" class="mkt-tab tab-active" onclick="switchMarket('SGX')">🇸🇬 Singapore (SGX)</button>
-    <button id="tab-set" class="mkt-tab" onclick="switchMarket('SET')">🇹🇭 Thailand (SET)</button>
+  <div class="mkt-tabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+    <button data-mkt="SGX" class="mkt-tab tab-active" onclick="switchMarket('SGX')">🇸🇬 Singapore (SGX)</button>
+    <button data-mkt="SET" class="mkt-tab" onclick="switchMarket('SET')">🇹🇭 Thailand (SET)</button>
+    <button data-mkt="HSI" class="mkt-tab" onclick="switchMarket('HSI')">🇭🇰 Hong Kong (HSI)</button>
+    <button data-mkt="HSTECH" class="mkt-tab" onclick="switchMarket('HSTECH')">🇭🇰 Hong Kong (HSTECH)</button>
   </div>
   <p style="font-size:12px;color:var(--text3);margin-bottom:14px">BO_20 breakout · BD5 breakdown · MMI market filter · Volume ratio · Liquidity split</p>
 
@@ -622,10 +624,145 @@ const DEFAULT_WL_SET = [
   {ticker:'WHAUP.BK',name:'WHA Utilities and Power'}
 ];
 
+// ── Watchlist: Hong Kong — Hang Seng Index (HSI, 93 constituents) ──
+// Source: Hang Seng Indexes Co. official constituent review, effective 8 Jun 2026
+const DEFAULT_WL_HSI = [
+  {ticker:'0005.HK',name:'HSBC Holdings'},
+  {ticker:'1299.HK',name:'AIA Group'},
+  {ticker:'0939.HK',name:'China Construction Bank'},
+  {ticker:'1398.HK',name:'ICBC'},
+  {ticker:'0388.HK',name:'Hong Kong Exchanges & Clearing'},
+  {ticker:'2318.HK',name:'Ping An Insurance'},
+  {ticker:'3988.HK',name:'Bank of China'},
+  {ticker:'2628.HK',name:'China Life Insurance'},
+  {ticker:'3968.HK',name:'China Merchants Bank'},
+  {ticker:'2388.HK',name:'BOC Hong Kong'},
+  {ticker:'9988.HK',name:'Alibaba Group'},
+  {ticker:'3690.HK',name:'Meituan'},
+  {ticker:'1211.HK',name:'BYD Company'},
+  {ticker:'9618.HK',name:'JD.com'},
+  {ticker:'9888.HK',name:'Baidu'},
+  {ticker:'0669.HK',name:'Techtronic Industries'},
+  {ticker:'1024.HK',name:'Kuaishou Technology'},
+  {ticker:'0175.HK',name:'Geely Auto'},
+  {ticker:'9992.HK',name:'Pop Mart'},
+  {ticker:'2020.HK',name:'Anta Sports'},
+  {ticker:'9961.HK',name:'Trip.com'},
+  {ticker:'9633.HK',name:'Nongfu Spring'},
+  {ticker:'2015.HK',name:'Li Auto'},
+  {ticker:'0288.HK',name:'WH Group'},
+  {ticker:'0027.HK',name:'Galaxy Entertainment'},
+  {ticker:'0066.HK',name:'MTR Corporation'},
+  {ticker:'0300.HK',name:'Midea Group'},
+  {ticker:'2319.HK',name:'Mengniu Dairy'},
+  {ticker:'6690.HK',name:'Haier Smart Home'},
+  {ticker:'0291.HK',name:'China Resources Beer'},
+  {ticker:'2331.HK',name:'Li Ning'},
+  {ticker:'2313.HK',name:'Shenzhou International'},
+  {ticker:'1928.HK',name:'Sands China'},
+  {ticker:'6181.HK',name:'Laopu Gold'},
+  {ticker:'9901.HK',name:'New Oriental Education'},
+  {ticker:'6862.HK',name:'Haidilao'},
+  {ticker:'0322.HK',name:'Tingyi'},
+  {ticker:'1929.HK',name:'Chow Tai Fook'},
+  {ticker:'1044.HK',name:'Hengan International'},
+  {ticker:'1876.HK',name:'Budweiser APAC'},
+  {ticker:'0700.HK',name:'Tencent Holdings'},
+  {ticker:'1810.HK',name:'Xiaomi'},
+  {ticker:'0981.HK',name:'SMIC'},
+  {ticker:'9999.HK',name:'NetEase'},
+  {ticker:'0992.HK',name:'Lenovo Group'},
+  {ticker:'0285.HK',name:'BYD Electronic'},
+  {ticker:'0883.HK',name:'CNOOC'},
+  {ticker:'0857.HK',name:'PetroChina'},
+  {ticker:'2899.HK',name:'Zijin Mining'},
+  {ticker:'0001.HK',name:'CK Hutchison Holdings'},
+  {ticker:'1088.HK',name:'China Shenhua Energy'},
+  {ticker:'3750.HK',name:'CATL'},
+  {ticker:'1378.HK',name:'China Hongqiao'},
+  {ticker:'0386.HK',name:'Sinopec Corp'},
+  {ticker:'0267.HK',name:'CITIC'},
+  {ticker:'2057.HK',name:'ZTO Express'},
+  {ticker:'3993.HK',name:'CMOC Group'},
+  {ticker:'1519.HK',name:'J&T Global Express'},
+  {ticker:'2382.HK',name:'Sunny Optical Technology'},
+  {ticker:'2600.HK',name:'Aluminum Corp of China'},
+  {ticker:'2618.HK',name:'JD Logistics'},
+  {ticker:'0868.HK',name:'Xinyi Glass'},
+  {ticker:'0316.HK',name:'Orient Overseas'},
+  {ticker:'0968.HK',name:'Xinyi Solar'},
+  {ticker:'0941.HK',name:'China Mobile'},
+  {ticker:'0002.HK',name:'CLP Holdings'},
+  {ticker:'0006.HK',name:'Power Assets Holdings'},
+  {ticker:'0003.HK',name:'HK & China Gas'},
+  {ticker:'0728.HK',name:'China Telecom'},
+  {ticker:'0762.HK',name:'China Unicom'},
+  {ticker:'2688.HK',name:'ENN Energy'},
+  {ticker:'0836.HK',name:'China Resources Power'},
+  {ticker:'1038.HK',name:'CK Infrastructure'},
+  {ticker:'6160.HK',name:'BeOne Medicines'},
+  {ticker:'1801.HK',name:'Innovent Biologics'},
+  {ticker:'2269.HK',name:'WuXi Biologics'},
+  {ticker:'2359.HK',name:'WuXi AppTec'},
+  {ticker:'1093.HK',name:'CSPC Pharmaceutical'},
+  {ticker:'1177.HK',name:'Sino Biopharmaceutical'},
+  {ticker:'3692.HK',name:'Hansoh Pharmaceutical'},
+  {ticker:'6618.HK',name:'JD Health'},
+  {ticker:'0241.HK',name:'Alibaba Health'},
+  {ticker:'1099.HK',name:'Sinopharm'},
+  {ticker:'0016.HK',name:'Sun Hung Kai Properties'},
+  {ticker:'1109.HK',name:'China Resources Land'},
+  {ticker:'0823.HK',name:'Link REIT'},
+  {ticker:'1113.HK',name:'CK Asset Holdings'},
+  {ticker:'0688.HK',name:'China Overseas Land'},
+  {ticker:'0012.HK',name:'Henderson Land'},
+  {ticker:'1997.HK',name:'Wharf REIC'},
+  {ticker:'1209.HK',name:'China Resources Mixc Lifestyle'},
+  {ticker:'0960.HK',name:'Longfor Group'},
+  {ticker:'0101.HK',name:'Hang Lung Properties'}
+];
+
+// ── Watchlist: Hong Kong — Hang Seng TECH Index (HSTECH, 30 constituents) ──
+// Source: Hang Seng Indexes Co. official constituent review, effective 8 Jun 2026
+const DEFAULT_WL_HSTECH = [
+  {ticker:'9988.HK',name:'Alibaba Group'},
+  {ticker:'3690.HK',name:'Meituan'},
+  {ticker:'1211.HK',name:'BYD Company'},
+  {ticker:'9618.HK',name:'JD.com'},
+  {ticker:'9888.HK',name:'Baidu'},
+  {ticker:'1024.HK',name:'Kuaishou Technology'},
+  {ticker:'9961.HK',name:'Trip.com'},
+  {ticker:'9868.HK',name:'XPeng'},
+  {ticker:'2015.HK',name:'Li Auto'},
+  {ticker:'0300.HK',name:'Midea Group'},
+  {ticker:'6690.HK',name:'Haier Smart Home'},
+  {ticker:'9626.HK',name:'Bilibili'},
+  {ticker:'9863.HK',name:'Leapmotor'},
+  {ticker:'0780.HK',name:'Tongcheng Travel'},
+  {ticker:'9866.HK',name:'NIO'},
+  {ticker:'1698.HK',name:'Tencent Music Entertainment'},
+  {ticker:'0700.HK',name:'Tencent Holdings'},
+  {ticker:'1810.HK',name:'Xiaomi'},
+  {ticker:'0981.HK',name:'SMIC'},
+  {ticker:'9999.HK',name:'NetEase'},
+  {ticker:'1347.HK',name:'Hua Hong Semiconductor'},
+  {ticker:'0992.HK',name:'Lenovo Group'},
+  {ticker:'9660.HK',name:'Horizon Robotics'},
+  {ticker:'0020.HK',name:'SenseTime'},
+  {ticker:'0285.HK',name:'BYD Electronic'},
+  {ticker:'2513.HK',name:'Knowledge Atlas Technology'},
+  {ticker:'0100.HK',name:'MiniMax Group'},
+  {ticker:'6618.HK',name:'JD Health'},
+  {ticker:'0241.HK',name:'Alibaba Health'},
+  {ticker:'2382.HK',name:'Sunny Optical Technology'}
+];
+
 // ── Market configuration ──
 const MARKETS = {
   SGX: { suffix:'.SI', currency:'SGD', locale:'en-SG', tz:'SGT', label:'Singapore (SGX)', short:'SGX', wl:DEFAULT_WL_SGX, liqDefault:100 },
-  SET: { suffix:'.BK', currency:'THB', locale:'en-TH', tz:'ICT', label:'Thailand (SET)',   short:'SET', wl:DEFAULT_WL_SET, liqDefault:3000 }
+  SET: { suffix:'.BK', currency:'THB', locale:'en-TH', tz:'ICT', label:'Thailand (SET)',   short:'SET', wl:DEFAULT_WL_SET, liqDefault:3000 },
+  HSI: { suffix:'.HK', currency:'HKD', locale:'en-HK', tz:'HKT', label:'Hong Kong (HSI)',  short:'HSI', wl:DEFAULT_WL_HSI, liqDefault:2000 },
+  HSTECH: { suffix:'.HK', currency:'HKD', locale:'en-HK', tz:'HKT', label:'Hong Kong (HSTECH)', short:'HSTECH', wl:DEFAULT_WL_HSTECH, liqDefault:2000 }
 };
 let currentMarket = 'SGX';
 
@@ -671,8 +808,9 @@ function switchMarket(mkt) {
   localMMIData = null;
 
   // Update UI chrome for the new market
-  document.getElementById('tab-sgx').classList.toggle('tab-active', mkt==='SGX');
-  document.getElementById('tab-set').classList.toggle('tab-active', mkt==='SET');
+  document.querySelectorAll('.mkt-tab').forEach(btn => {
+    btn.classList.toggle('tab-active', btn.dataset.mkt === mkt);
+  });
   document.getElementById('h1title').textContent = cfg.label+' Breakout Scanner';
   document.getElementById('liq-label-txt').textContent = 'Liquid min ('+cfg.currency+' k/day)';
   document.getElementById('liq-min').value = cfg.liqDefault;
@@ -1342,10 +1480,10 @@ function maybeAutoSync() {
     // Supabase: primary sync (works on both laptops) — safe for both markets,
     // rows are tagged and filtered by `market` so SGX and Thailand never mix.
     if (sbUrl && sbKey) syncToSupabase(true);
-    // Google Sheets: backup archive — only auto-runs for SGX for now, since the
-    // Apps Script side doesn't yet separate markets. Ask Claude to update the
-    // script when you're ready to archive Thailand data too.
-    if (sheetSyncUrl && currentMarket === 'SGX') syncToSheet(true);
+    // Google Sheets: backup archive — now market-aware (v3 script tags rows by
+    // market and uses separate Stock_Pool_SGX / Stock_Pool_SET tabs etc.),
+    // so this runs for both markets, not just SGX.
+    if (sheetSyncUrl) syncToSheet(true);
   }
 }
 
