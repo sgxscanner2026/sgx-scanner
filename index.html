@@ -379,12 +379,11 @@ function updateProxyBar(i) {
 }
 
 async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
-  const cacheBust = (params.includes('?') ? '&' : '?') + '_cb=' + Date.now();
   for (let i = proxyIdx; i < PROXIES.length; i++) {
     for (const base of [YQ1, YQ2]) {
       try {
-        const url = PROXIES[i](base + encodeURIComponent(ticker) + params + cacheBust);
-        const r = await fetch(url, {signal: AbortSignal.timeout(9000), cache: 'no-store'});
+        const url = PROXIES[i](base + encodeURIComponent(ticker) + params);
+        const r = await fetch(url, {signal: AbortSignal.timeout(9000)});
         if (!r.ok) throw new Error('HTTP '+r.status);
         const j = await r.json();
         const res = j?.chart?.result?.[0];
@@ -1038,6 +1037,7 @@ function reScan() {
 
 // ── Fetch all ──
 async function fetchAll() {
+  proxyIdx = 0; // retry from the top each cycle — don't stay stuck on a worse fallback proxy forever
   setStatus('live');
   document.getElementById('ts').textContent = 'Refreshing...';
   await Promise.all([...wl.map(s => loadStock(s)), fetchIndexQuote()]);
