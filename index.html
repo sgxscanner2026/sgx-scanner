@@ -944,7 +944,7 @@ async function fetchIndexQuote() {
     const closes = res.indicators?.quote?.[0]?.close || [];
     const validCloses = closes.filter(c => c != null);
     const price = meta.regularMarketPrice;
-    const prevClose = meta.chartPreviousClose || meta.previousClose || validCloses[validCloses.length-2];
+    const prevClose = validCloses[validCloses.length-2] || meta.chartPreviousClose || meta.previousClose;
     const chg = (price!=null && prevClose) ? price - prevClose : null;
     const chgPct = (chg!=null && prevClose) ? chg/prevClose*100 : null;
     renderIndexBanner(cfg, price, chg, chgPct);
@@ -1816,7 +1816,7 @@ async function fetchIndices() {
       const closes = res.indicators?.quote?.[0]?.close || [];
       const validCloses = closes.filter(c => c != null);
       const price = meta.regularMarketPrice;
-      const prevClose = meta.chartPreviousClose || meta.previousClose || validCloses[validCloses.length-2];
+      const prevClose = validCloses[validCloses.length-2] || meta.chartPreviousClose || meta.previousClose;
       const chgPct = (price!=null && prevClose) ? (price-prevClose)/prevClose*100 : null;
       const el = document.getElementById('idx-'+key);
       if (el && price != null) {
