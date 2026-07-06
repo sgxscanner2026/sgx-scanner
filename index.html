@@ -941,8 +941,10 @@ async function fetchIndexQuote() {
     const res = await fetchWithProxy(cfg.indexTicker, '?interval=1d&range=5d');
     const meta = res.meta;
     if (!meta) throw new Error('no index meta');
+    const closes = res.indicators?.quote?.[0]?.close || [];
+    const validCloses = closes.filter(c => c != null);
     const price = meta.regularMarketPrice;
-    const prevClose = meta.chartPreviousClose || meta.previousClose;
+    const prevClose = meta.chartPreviousClose || meta.previousClose || validCloses[validCloses.length-2];
     const chg = (price!=null && prevClose) ? price - prevClose : null;
     const chgPct = (chg!=null && prevClose) ? chg/prevClose*100 : null;
     renderIndexBanner(cfg, price, chg, chgPct);
@@ -1811,8 +1813,10 @@ async function fetchIndices() {
       const res = await fetchWithProxy(ticker, '?interval=1d&range=5d');
       const meta = res.meta;
       if (!meta) throw new Error('no meta');
+      const closes = res.indicators?.quote?.[0]?.close || [];
+      const validCloses = closes.filter(c => c != null);
       const price = meta.regularMarketPrice;
-      const prevClose = meta.chartPreviousClose || meta.previousClose;
+      const prevClose = meta.chartPreviousClose || meta.previousClose || validCloses[validCloses.length-2];
       const chgPct = (price!=null && prevClose) ? (price-prevClose)/prevClose*100 : null;
       const el = document.getElementById('idx-'+key);
       if (el && price != null) {
