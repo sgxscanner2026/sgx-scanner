@@ -190,11 +190,12 @@ tr.top-hit:hover{background:#fef3c7}
     <button data-mkt="HSI" class="mkt-tab" onclick="switchMarket('HSI')">🇭🇰 Hong Kong (HSI)</button>
     <button data-mkt="HSTECH" class="mkt-tab" onclick="switchMarket('HSTECH')">🇭🇰 Hong Kong (HSTECH)</button>
   </div>
-  <div id="idx-strip" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+  <div id="idx-strip" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
     <span class="idx-pill" id="idx-STI">STI —</span>
     <span class="idx-pill" id="idx-SETI">SET Index —</span>
     <span class="idx-pill" id="idx-HSI">HSI —</span>
     <span class="idx-pill" id="idx-HSTECH">HSTECH —</span>
+    <span id="idx-strip-ts" style="font-size:11px;color:var(--text3)"></span>
   </div>
   <p style="font-size:12px;color:var(--text3);margin-bottom:14px">BO_20 breakout · BD5 breakdown · MMI market filter · Volume ratio · Liquidity split</p>
   <div id="index-banner" style="display:flex;align-items:baseline;gap:10px;padding:8px 14px;border-radius:var(--radius-sm,8px);background:var(--bg2,#f5f5f5);margin-bottom:14px;font-size:13px">
@@ -378,11 +379,12 @@ function updateProxyBar(i) {
 }
 
 async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
+  const cacheBust = (params.includes('?') ? '&' : '?') + '_cb=' + Date.now();
   for (let i = proxyIdx; i < PROXIES.length; i++) {
     for (const base of [YQ1, YQ2]) {
       try {
-        const url = PROXIES[i](base + encodeURIComponent(ticker) + params);
-        const r = await fetch(url, {signal: AbortSignal.timeout(9000)});
+        const url = PROXIES[i](base + encodeURIComponent(ticker) + params + cacheBust);
+        const r = await fetch(url, {signal: AbortSignal.timeout(9000), cache: 'no-store'});
         if (!r.ok) throw new Error('HTTP '+r.status);
         const j = await r.json();
         const res = j?.chart?.result?.[0];
@@ -1825,6 +1827,8 @@ async function fetchIndices() {
       if (el) el.textContent = key.replace('SETI','SET Index') + ': —';
     }
   }
+  const tsEl = document.getElementById('idx-strip-ts');
+  if (tsEl) tsEl.textContent = 'refreshed ' + new Date().toLocaleTimeString();
 }
 
 loadSbCredsFromStorage();
