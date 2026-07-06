@@ -379,11 +379,18 @@ function updateProxyBar(i) {
 }
 
 async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
+  // BUGFIX: public CORS proxies (corsproxy.io / allorigins.win) cache their
+  // responses by the exact URL they're asked to fetch. Without a unique
+  // query param each call, they were serving back an old cached Yahoo
+  // response instead of hitting Yahoo again — that's why prices/index
+  // levels looked stale even though the scanner said "LIVE". Appending a
+  // changing cache-buster forces every call to be treated as a fresh URL.
+  const cacheBusted = params + '&_cb=' + Date.now();
   for (let i = proxyIdx; i < PROXIES.length; i++) {
     for (const base of [YQ1, YQ2]) {
       try {
-        const url = PROXIES[i](base + encodeURIComponent(ticker) + params);
-        const r = await fetch(url, {signal: AbortSignal.timeout(9000)});
+        const url = PROXIES[i](base + encodeURIComponent(ticker) + cacheBusted);
+        const r = await fetch(url, {signal: AbortSignal.timeout(9000), cache: 'no-store'});
         if (!r.ok) throw new Error('HTTP '+r.status);
         const j = await r.json();
         const res = j?.chart?.result?.[0];
@@ -396,6 +403,18 @@ async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
   }
   throw new Error('All proxies failed for '+ticker);
 }
+
+// ── Manual fallback closes ──
+// Used ONLY when every proxy fails outright (e.g. all 4 CORS proxies down
+// at once). Update the numbers/date below whenever you confirm a close
+// from Yahoo Finance so the banner never shows a wildly outdated figure
+// if the live fetch chain is temporarily broken.
+const MANUAL_INDEX_FALLBACK = {
+  STI:    { price: 5259.81,  asOf: '2026-07-03' },
+  SETI:   { price: 1616.88,  asOf: '2026-07-03' },
+  HSI:    { price: 23616.32, asOf: '2026-07-03' },
+  HSTECH: { price: 4541.23,  asOf: '2026-07-03' }
+};
 
 // ── Watchlist: Singapore (SGX) — top ~140 liquid counters by market cap ──
 const DEFAULT_WL_SGX = [
@@ -949,17 +968,24 @@ async function fetchIndexQuote() {
     const chgPct = (chg!=null && prevClose) ? chg/prevClose*100 : null;
     renderIndexBanner(cfg, price, chg, chgPct);
   } catch(e) {
-    renderIndexBanner(cfg, null, null, null);
+    const fbKey = cfg.short === 'SET' ? 'SETI' : cfg.short;
+    const fb = MANUAL_INDEX_FALLBACK[fbKey];
+    if (fb) renderIndexBanner(cfg, fb.price, null, null, fb.asOf);
+    else renderIndexBanner(cfg, null, null, null);
   }
 }
 
-function renderIndexBanner(cfg, price, chg, chgPct) {
+function renderIndexBanner(cfg, price, chg, chgPct, fallbackAsOf) {
   document.getElementById('index-name').textContent = cfg.indexName;
   const priceEl = document.getElementById('index-price');
   const chgEl = document.getElementById('index-chg');
   if (price == null) {
     priceEl.textContent = '—';
     chgEl.textContent = 'unavailable';
+    chgEl.style.color = 'var(--text3)';
+  } else if (fallbackAsOf) {
+    priceEl.textContent = price.toLocaleString(cfg.locale, {minimumFractionDigits:2, maximumFractionDigits:2});
+    chgEl.textContent = 'last confirmed close · ' + fallbackAsOf;
     chgEl.style.color = 'var(--text3)';
   } else {
     priceEl.textContent = price.toLocaleString(cfg.locale, {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1828,7 +1854,15 @@ async function fetchIndices() {
       }
     } catch(e) {
       const el = document.getElementById('idx-'+key);
-      if (el) el.textContent = key.replace('SETI','SET Index') + ': —';
+      const fb = MANUAL_INDEX_FALLBACK[key];
+      if (el) {
+        if (fb) {
+          el.textContent = key.replace('SETI','SET Index') + ': ' + fb.price.toLocaleString(undefined,{maximumFractionDigits:2}) + ' (as of ' + fb.asOf + ')';
+          el.classList.remove('up','down');
+        } else {
+          el.textContent = key.replace('SETI','SET Index') + ': —';
+        }
+      }
     }
   }
   const tsEl = document.getElementById('idx-strip-ts');
