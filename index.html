@@ -343,11 +343,13 @@ tr.top-hit:hover{background:#fef3c7}
     <tbody id="bd-ill-body"><tr class="lrow"><td colspan="9">Loading...</td></tr></tbody>
   </table></div>
 
-  <!-- Add stock -->
+  <!-- Add / Remove stock -->
   <div class="add-row">
     <input type="text" id="ainp" placeholder="e.g. G13" maxlength="12" onkeydown="if(event.key==='Enter')addStock()">
     <button onclick="addStock()">+ Add stock</button>
     <span class="hint" id="ainp-hint">SGX ticker — .SI added automatically</span>
+    <input type="text" id="rinp" placeholder="e.g. G13" maxlength="12" style="margin-left:16px" onkeydown="if(event.key==='Enter')removeStock()">
+    <button onclick="removeStock()">− Remove stock</button>
   </div>
 
   <div class="footer" id="footer-txt">
@@ -1776,6 +1778,21 @@ async function addStock(){
   sd[t]={ticker:t,name:t,loaded:false,err:false}; wl.push({ticker:t,name:t});
   document.getElementById('ainp').value='';
   await loadStock(sd[t]); reScan();
+}
+
+function removeStock(){
+  let t=document.getElementById('rinp').value.trim().toUpperCase();
+  const suf = MARKETS[currentMarket].suffix;
+  if(!t)return; if(!t.endsWith(suf))t+=suf;
+  if(!sd[t]){showToast(t+' is not in the watchlist.');return;}
+  const removedName = sd[t].name || t;
+  delete sd[t];
+  wl = wl.filter(s => s.ticker !== t);
+  if (prevAlerted[t]) delete prevAlerted[t];
+  savePrevAlerted(currentMarket, prevAlerted);
+  document.getElementById('rinp').value='';
+  showToast(removedName.replace(suf,'')+' removed from watchlist.');
+  reScan();
 }
 
 // ── Market index quotes (STI, SET Index, HSI, HSTECH) — shown regardless of active tab ──
