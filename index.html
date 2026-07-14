@@ -938,18 +938,43 @@ async function loadStock(s) {
     const liqThresh = parseFloat(document.getElementById('liq-min').value) || 100;
     const isLiquid  = avgDailyVal ? avgDailyVal >= liqThresh : false;
 
+    // Pull the real company name from Yahoo's own metadata. Only overwrite
+    // if we don't already have a curated name (avoids clobbering the
+    // hand-picked short names in the default watchlists, e.g. "DBS Group"
+    // instead of Yahoo's official "DBS Group Holdings Ltd").
+    const existingName = sd[s.ticker]?.name;
+    const fetchedName = meta.shortName || meta.longName;
+    const resolvedName = (fetchedName && (!existingName || existingName === s.ticker))
+      ? fetchedName : (existingName || s.ticker);
+
     sd[s.ticker] = {
       ...sd[s.ticker],
+      name: resolvedName,
       price, prevClose, openToday, volToday,
       high20, low5, volRatio, lastOpen, chgPct,
       avgDailyVal, isLiquid,
       low52: meta.fiftyTwoWeekLow,
       high52: meta.fiftyTwoWeekHigh,
-      loaded: true, err: false,
+      loaded: true, err: false, stale: false,
+      lastUpdated: Date.now(),
     };
   } catch(e) {
-    sd[s.ticker].err = true;
-    sd[s.ticker].loaded = false;
+    // BUGFIX: previously a failed fetch left every old field (price, chgPct,
+    // 20D high, etc.) untouched and just flipped err=true — but nothing in
+    // the UI actually surfaced that error, so a ticker that kept failing
+    // silently just kept showing its last successful reading forever,
+    // looking exactly like fresh live data. G07.SI is a real example: it's
+    // thin enough that fetches for it fail more often than liquid names,
+    // so its numbers were frozen for days while everything else refreshed.
+    // Now: keep the last known price visible (still useful), but mark it
+    // `stale` so the UI can flag it, and track how long it's been stuck.
+    const prior = sd[s.ticker] || {};
+    sd[s.ticker] = {
+      ...prior,
+      err: true,
+      loaded: prior.loaded || false,
+      stale: !!prior.loaded, // only "stale" if we'd previously loaded it successfully
+    };
   }
 }
 
@@ -1638,6 +1663,15 @@ function reScan() {
 function fp(p,d=2){ if(p==null||isNaN(p))return'—'; return p<1&&p>-1&&p!==0?p.toFixed(3):p.toFixed(d); }
 function fpc(p){ if(p==null||isNaN(p))return'—'; return (p>=0?'+':'')+p.toFixed(2)+'%'; }
 function fvr(v){ if(v==null||isNaN(v))return'—'; return v.toFixed(2)+'x'; }
+// A ticker counts as stale if we haven't gotten a successful refresh in
+// 3+ poll cycles (default 3 min at 60s rate), or the last fetch outright
+// errored after a previous success. Either way the number on screen may
+// no longer reflect the real market.
+function isStaleNow(s) {
+  if (s.stale) return true;
+  if (!s.lastUpdated) return false;
+  return (Date.now() - s.lastUpdated) > Math.max(rate * 3, 180000);
+}
 function flo(v){ if(v==null||isNaN(v))return'—'; return v.toFixed(4); }
 
 function hitsClass(h) {
@@ -1655,10 +1689,11 @@ function rowBO(s, hitsN) {
   const vpct=Math.min(100,(vr/4)*100).toFixed(0);
   const rc=hitsN>=6?'top-hit':'';
   const illiq=!s.isLiquid?`<span class="illiq-label">illiq</span>`:'';
+  const stale = isStaleNow(s) ? `<span title="Price hasn't refreshed recently — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
     <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
-    <td><strong>${fp(s.price)}</strong></td>
+    <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.lastOpen&&s.lastOpen>1?'up':s.lastOpen&&s.lastOpen<1?'dn':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
     <td style="color:var(--text2)">${fp(s.high20)}</td>
@@ -1675,10 +1710,11 @@ function rowBD(s, hitsN) {
   const vpct=Math.min(100,(vr/4)*100).toFixed(0);
   const rc=hitsN>=6?'top-hit':'';
   const illiq=!s.isLiquid?`<span class="illiq-label">illiq</span>`:'';
+  const stale = isStaleNow(s) ? `<span title="Price hasn't refreshed recently — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
     <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
-    <td><strong>${fp(s.price)}</strong></td>
+    <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.lastOpen&&s.lastOpen<1?'dn':s.lastOpen&&s.lastOpen>1?'up':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
     <td style="color:var(--text2)">${fp(s.low5)}</td>
