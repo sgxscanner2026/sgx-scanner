@@ -404,6 +404,42 @@ async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
   throw new Error('All proxies failed for '+ticker);
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Manual "force refresh this ticker" — for one-off cases where a single
+// name (like a thin/illiquid stock) keeps missing the regular poll cycle.
+// Re-fetches just that one ticker immediately (bypassing the batch queue),
+// re-scans, and — if Supabase is connected — pushes the fresh reading
+// straight to the shared pool so both laptops see it without waiting for
+// the next full sync.
+async function forceRefreshTicker(ticker) {
+  const label = ticker.replace(MARKETS[currentMarket].suffix, '');
+  showToast('Refreshing ' + label + '...');
+  const entry = sd[ticker] || { ticker, name: ticker, loaded: false, err: false };
+  sd[ticker] = entry;
+  proxyIdx = 0;
+  await loadStock(entry);
+  reScan();
+  if (sbUrl && sbKey) { try { await syncToSupabase(true); } catch(e) {} }
+  showToast(sd[ticker].err ? label + ' still failing — try again shortly' : label + ' updated ✓');
+}
+
+// Wraps fetchWithProxy with one retry after a short, jittered delay.
+// A single failed pass through every proxy combo often means the proxy
+// briefly rate-limited us mid-burst (common when ~140 tickers all fetch
+// close together) rather than being genuinely down — waiting a moment
+// and trying again catches most of those transient failures instead of
+// giving up and leaving that ticker's row frozen for a whole poll cycle.
+async function fetchWithRetry(ticker, params, retries=1) {
+  try {
+    return await fetchWithProxy(ticker, params);
+  } catch (e) {
+    if (retries <= 0) throw e;
+    await sleep(800 + Math.random()*700);
+    return fetchWithRetry(ticker, params, retries-1);
+  }
+}
+
 // ── Manual fallback closes ──
 // Used ONLY when every proxy fails outright (e.g. all 4 CORS proxies down
 // at once). Update the numbers/date below whenever you confirm a close
@@ -890,7 +926,7 @@ function playSound(type) {
 async function loadStock(s) {
   try {
     // Fetch 3 months of daily data for rolling calculations
-    const res = await fetchWithProxy(s.ticker, '?interval=1d&range=3mo');
+    const res = await fetchWithRetry(s.ticker, '?interval=1d&range=3mo');
     const meta = res.meta;
     const quotes = res.indicators?.quote?.[0];
     const timestamps = res.timestamp || [];
@@ -982,7 +1018,7 @@ async function loadStock(s) {
 async function fetchIndexQuote() {
   const cfg = MARKETS[currentMarket];
   try {
-    const res = await fetchWithProxy(cfg.indexTicker, '?interval=1d&range=5d');
+    const res = await fetchWithRetry(cfg.indexTicker, '?interval=1d&range=5d');
     const meta = res.meta;
     if (!meta) throw new Error('no index meta');
     const closes = res.indicators?.quote?.[0]?.close || [];
@@ -1093,7 +1129,19 @@ async function fetchAll() {
   proxyIdx = 0; // retry from the top each cycle — don't stay stuck on a worse fallback proxy forever
   setStatus('live');
   document.getElementById('ts').textContent = 'Refreshing...';
-  await Promise.all([...wl.map(s => loadStock(s)), fetchIndexQuote()]);
+  // BUGFIX: firing loadStock for all ~140 watchlist tickers at once (one big
+  // Promise.all) sends a huge burst of requests through the same CORS proxy
+  // in the same instant. Public proxies rate-limit bursts like that, so a
+  // chunk of tickers — often the ones queued near the end — would silently
+  // fail every single cycle. Fetching in small batches with a short pause
+  // between them keeps us under the burst threshold instead.
+  const BATCH_SIZE = 8, BATCH_DELAY_MS = 250;
+  fetchIndexQuote(); // index banner can run independently, no need to wait on it
+  for (let i = 0; i < wl.length; i += BATCH_SIZE) {
+    const batch = wl.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(s => loadStock(s)));
+    if (i + BATCH_SIZE < wl.length) await sleep(BATCH_DELAY_MS);
+  }
   reScan();
   const n = new Date();
   document.getElementById('ts').textContent = 'Last updated: '+n.toLocaleTimeString(MARKETS[currentMarket].locale,{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · '+MARKETS[currentMarket].tz;
@@ -1397,7 +1445,7 @@ function rowBOPool(s) {
   const stale = isStalePoolRow(s) ? `<span title="No fresh sync for this ticker in 10+ min — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
-    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a> <button class="news-link" title="Force refresh this ticker now" onclick="event.stopPropagation();forceRefreshTicker('${s.ticker}')" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit">🔄</button></td>
     <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.last_open&&s.last_open>1?'up':s.last_open&&s.last_open<1?'dn':'nt'}">${lo}</td>
@@ -1419,7 +1467,7 @@ function rowBDPool(s) {
   const stale = isStalePoolRow(s) ? `<span title="No fresh sync for this ticker in 10+ min — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
-    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a> <button class="news-link" title="Force refresh this ticker now" onclick="event.stopPropagation();forceRefreshTicker('${s.ticker}')" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit">🔄</button></td>
     <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.last_open&&s.last_open<1?'dn':s.last_open&&s.last_open>1?'up':'nt'}">${lo}</td>
@@ -1706,7 +1754,7 @@ function rowBO(s, hitsN) {
   const stale = isStaleNow(s) ? `<span title="Price hasn't refreshed recently — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
-    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a> <button class="news-link" title="Force refresh this ticker now" onclick="event.stopPropagation();forceRefreshTicker('${s.ticker}')" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit">🔄</button></td>
     <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.lastOpen&&s.lastOpen>1?'up':s.lastOpen&&s.lastOpen<1?'dn':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
@@ -1727,7 +1775,7 @@ function rowBD(s, hitsN) {
   const stale = isStaleNow(s) ? `<span title="Price hasn't refreshed recently — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(hitsN)}">${hitsN}</span></td>
-    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
+    <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a> <button class="news-link" title="Force refresh this ticker now" onclick="event.stopPropagation();forceRefreshTicker('${s.ticker}')" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit">🔄</button></td>
     <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.lastOpen&&s.lastOpen<1?'dn':s.lastOpen&&s.lastOpen>1?'up':'nt'}">${s.lastOpen?s.lastOpen.toFixed(4):'—'}</td>
@@ -1886,7 +1934,7 @@ const INDEX_TICKERS = {
 async function fetchIndices() {
   for (const [key, ticker] of Object.entries(INDEX_TICKERS)) {
     try {
-      const res = await fetchWithProxy(ticker, '?interval=1d&range=5d');
+      const res = await fetchWithRetry(ticker, '?interval=1d&range=5d');
       const meta = res.meta;
       if (!meta) throw new Error('no meta');
       const closes = res.indicators?.quote?.[0]?.close || [];
