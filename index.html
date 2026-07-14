@@ -365,15 +365,6 @@ tr.top-hit:hover{background:#fef3c7}
 // ── Proxy chain ──
 const YQ1 = 'https://query1.finance.yahoo.com/v8/finance/chart/';
 const YQ2 = 'https://query2.finance.yahoo.com/v8/finance/chart/';
-// v7/finance/quote is Yahoo's batched live-quote endpoint — the same family
-// of endpoint their own markets/world-indices page uses to render current
-// prices. Unlike v8/finance/chart (built for historical bars, which is why
-// we use it for stocks that need 20D high/5D low), this one is optimized
-// for "what's the price right now" and fetches multiple symbols in a
-// single call — better fit for the 4 index banners, which don't need
-// historical arrays at all.
-const YQ_QUOTE1 = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=';
-const YQ_QUOTE2 = 'https://query2.finance.yahoo.com/v7/finance/quote?symbols=';
 const PROXIES = [
   u=>u,
   u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -425,43 +416,6 @@ async function refreshIndexesNow() {
   proxyIdx = 0;
   await Promise.all([fetchIndexQuote(), fetchIndices()]);
   showToast('Indexes updated ✓');
-}
-
-// Batched live-quote fetch for the 4 index tickers — one request instead
-// of four, using Yahoo's v7/finance/quote endpoint (fresher than the chart
-// endpoint's meta.regularMarketPrice for names that don't trade often).
-async function fetchQuoteBatch(tickers) {
-  const symbols = encodeURIComponent(tickers.join(','));
-  const cacheBusted = '&_cb=' + Date.now();
-  for (let i = proxyIdx; i < PROXIES.length; i++) {
-    for (const base of [YQ_QUOTE1, YQ_QUOTE2]) {
-      try {
-        const url = PROXIES[i](base + symbols + cacheBusted);
-        const r = await fetch(url, {signal: AbortSignal.timeout(9000), cache: 'no-store'});
-        if (!r.ok) throw new Error('HTTP '+r.status);
-        const j = await r.json();
-        const results = j?.quoteResponse?.result;
-        if (!results || !results.length) throw new Error('no result');
-        proxyIdx = i;
-        updateProxyBar(i);
-        // Return as a map keyed by symbol for easy lookup
-        const map = {};
-        results.forEach(q => { map[q.symbol] = q; });
-        return map;
-      } catch(e) {}
-    }
-  }
-  throw new Error('All proxies failed for quote batch');
-}
-
-async function fetchQuoteBatchWithRetry(tickers, retries=1) {
-  try {
-    return await fetchQuoteBatch(tickers);
-  } catch (e) {
-    if (retries <= 0) throw e;
-    await sleep(800 + Math.random()*700);
-    return fetchQuoteBatchWithRetry(tickers, retries-1);
-  }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -1078,12 +1032,15 @@ async function loadStock(s) {
 async function fetchIndexQuote() {
   const cfg = MARKETS[currentMarket];
   try {
-    const map = await fetchQuoteBatchWithRetry([cfg.indexTicker]);
-    const q = map[cfg.indexTicker];
-    if (!q || q.regularMarketPrice == null) throw new Error('no index quote');
-    const price = q.regularMarketPrice;
-    const chg = q.regularMarketChange;
-    const chgPct = q.regularMarketChangePercent;
+    const res = await fetchWithRetry(cfg.indexTicker, '?interval=1d&range=5d');
+    const meta = res.meta;
+    if (!meta) throw new Error('no index meta');
+    const closes = res.indicators?.quote?.[0]?.close || [];
+    const validCloses = closes.filter(c => c != null);
+    const price = meta.regularMarketPrice;
+    const prevClose = validCloses[validCloses.length-2] || meta.chartPreviousClose || meta.previousClose;
+    const chg = (price!=null && prevClose) ? price - prevClose : null;
+    const chgPct = (chg!=null && prevClose) ? chg/prevClose*100 : null;
     renderIndexBanner(cfg, price, chg, chgPct);
   } catch(e) {
     // BUGFIX: this used to be `cfg.short === 'SET' ? 'SETI' : cfg.short`,
@@ -1996,30 +1953,34 @@ const INDEX_TICKERS = {
 };
 
 async function fetchIndices() {
-  let map = {};
-  try {
-    map = await fetchQuoteBatchWithRetry(Object.values(INDEX_TICKERS));
-  } catch(e) { /* fall through — every ticker below will hit its fallback */ }
-
   for (const [key, ticker] of Object.entries(INDEX_TICKERS)) {
-    const el = document.getElementById('idx-'+key);
-    if (!el) continue;
-    const q = map[ticker];
-    if (q && q.regularMarketPrice != null) {
-      const price = q.regularMarketPrice;
-      const chgPct = q.regularMarketChangePercent;
-      const sign = chgPct>=0 ? '+' : '';
-      el.textContent = key.replace('SETI','SET Index') + ': ' + price.toLocaleString(undefined,{maximumFractionDigits:2})
-        + (chgPct!=null ? ' ('+sign+chgPct.toFixed(2)+'%)' : '');
-      el.classList.toggle('up', chgPct>0);
-      el.classList.toggle('down', chgPct<0);
-    } else {
+    try {
+      const res = await fetchWithRetry(ticker, '?interval=1d&range=5d');
+      const meta = res.meta;
+      if (!meta) throw new Error('no meta');
+      const closes = res.indicators?.quote?.[0]?.close || [];
+      const validCloses = closes.filter(c => c != null);
+      const price = meta.regularMarketPrice;
+      const prevClose = validCloses[validCloses.length-2] || meta.chartPreviousClose || meta.previousClose;
+      const chgPct = (price!=null && prevClose) ? (price-prevClose)/prevClose*100 : null;
+      const el = document.getElementById('idx-'+key);
+      if (el && price != null) {
+        const sign = chgPct>=0 ? '+' : '';
+        el.textContent = key.replace('SETI','SET Index') + ': ' + price.toLocaleString(undefined,{maximumFractionDigits:2})
+          + (chgPct!=null ? ' ('+sign+chgPct.toFixed(2)+'%)' : '');
+        el.classList.toggle('up', chgPct>0);
+        el.classList.toggle('down', chgPct<0);
+      }
+    } catch(e) {
+      const el = document.getElementById('idx-'+key);
       const fb = MANUAL_INDEX_FALLBACK[key];
-      if (fb) {
-        el.textContent = key.replace('SETI','SET Index') + ': ' + fb.price.toLocaleString(undefined,{maximumFractionDigits:2}) + ' (as of ' + fb.asOf + ')';
-        el.classList.remove('up','down');
-      } else {
-        el.textContent = key.replace('SETI','SET Index') + ': —';
+      if (el) {
+        if (fb) {
+          el.textContent = key.replace('SETI','SET Index') + ': ' + fb.price.toLocaleString(undefined,{maximumFractionDigits:2}) + ' (as of ' + fb.asOf + ')';
+          el.classList.remove('up','down');
+        } else {
+          el.textContent = key.replace('SETI','SET Index') + ': —';
+        }
       }
     }
   }
