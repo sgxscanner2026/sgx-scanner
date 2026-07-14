@@ -195,6 +195,7 @@ tr.top-hit:hover{background:#fef3c7}
     <span class="idx-pill" id="idx-SETI">SET Index —</span>
     <span class="idx-pill" id="idx-HSI">HSI —</span>
     <span class="idx-pill" id="idx-HSTECH">HSTECH —</span>
+    <button onclick="refreshIndexesNow()" title="Force refresh all indexes now" style="border:1px solid var(--border,#ddd);background:var(--bg1,#fff);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px">🔄 Refresh indexes</button>
     <span id="idx-strip-ts" style="font-size:11px;color:var(--text3)"></span>
   </div>
   <p style="font-size:12px;color:var(--text3);margin-bottom:14px">BO_20 breakout · BD5 breakdown · MMI market filter · Volume ratio · Liquidity split</p>
@@ -202,6 +203,7 @@ tr.top-hit:hover{background:#fef3c7}
     <span id="index-name" style="font-weight:600">Straits Times Index</span>
     <span id="index-price">—</span>
     <span id="index-chg">—</span>
+    <button onclick="refreshIndexesNow()" title="Force refresh this index now" style="border:none;background:none;cursor:pointer;padding:0;font-size:13px">🔄</button>
     <span style="margin-left:auto;color:var(--text3);font-size:11px" id="index-time"></span>
   </div>
 
@@ -402,6 +404,18 @@ async function fetchWithProxy(ticker, params='?interval=1d&range=3mo') {
     }
   }
   throw new Error('All proxies failed for '+ticker);
+}
+
+// Manual "refresh indexes now" — the index banner/pills poll on their own
+// cycle, and like individual stocks can occasionally miss a beat (proxy
+// rate-limiting, brief outage) and fall back to the last confirmed close.
+// This lets you force an immediate re-fetch without waiting for the next
+// scheduled poll or a full page reload.
+async function refreshIndexesNow() {
+  showToast('Refreshing indexes...');
+  proxyIdx = 0;
+  await Promise.all([fetchIndexQuote(), fetchIndices()]);
+  showToast('Indexes updated ✓');
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
