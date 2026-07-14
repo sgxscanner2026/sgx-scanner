@@ -1043,7 +1043,14 @@ async function fetchIndexQuote() {
     const chgPct = (chg!=null && prevClose) ? chg/prevClose*100 : null;
     renderIndexBanner(cfg, price, chg, chgPct);
   } catch(e) {
-    const fbKey = cfg.short === 'SET' ? 'SETI' : cfg.short;
+    // BUGFIX: this used to be `cfg.short === 'SET' ? 'SETI' : cfg.short`,
+    // which only patched the Thailand case. Singapore's market code is
+    // 'SGX' but its fallback entry is keyed 'STI' — so that mismatch fell
+    // straight to "unavailable" instead of ever finding the fallback,
+    // even though the exact same data was right there and the pill strip
+    // (which maps by index ticker, not market code) found it just fine.
+    const MARKET_TO_FALLBACK_KEY = { SGX: 'STI', SET: 'SETI', HSI: 'HSI', HSTECH: 'HSTECH' };
+    const fbKey = MARKET_TO_FALLBACK_KEY[cfg.short] || cfg.short;
     const fb = MANUAL_INDEX_FALLBACK[fbKey];
     if (fb) renderIndexBanner(cfg, fb.price, null, null, fb.asOf);
     else renderIndexBanner(cfg, null, null, null);
