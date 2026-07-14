@@ -1373,6 +1373,18 @@ function renderCanonicalBD(signals) {
   document.getElementById('bd-ill-body').innerHTML = ill.length ? ill.map(s => rowBDPool(s)).join('') : emptyRow('No illiquid BD5 signals');
 }
 
+// A pool row is stale if Supabase hasn't received a fresh push for that
+// ticker in a while. Unlike the local live table, this can't use an
+// in-memory timestamp — it has to read `updated_at`, which every laptop
+// stamps when it successfully pushes a reading (see syncToSupabase). If
+// every laptop's fetch for a ticker keeps failing, that row simply never
+// gets overwritten, and this is the only way to see that from the outside.
+function isStalePoolRow(s) {
+  if (!s.updated_at) return false;
+  const ageMs = Date.now() - new Date(s.updated_at).getTime();
+  return ageMs > 10 * 60 * 1000; // no fresh push in 10+ minutes
+}
+
 // Row renderers for pool data (snake_case fields from Supabase)
 function rowBOPool(s) {
   const p = s.chg_pct, cls = p>0?'up':p<0?'dn':'nt';
@@ -1382,10 +1394,11 @@ function rowBOPool(s) {
   const rc = s.hits>=6?'top-hit':'';
   const illiq = !s.liquid?'<span class="illiq-label">illiq</span>':'';
   const lo = s.last_open ? s.last_open.toFixed(4) : '—';
+  const stale = isStalePoolRow(s) ? `<span title="No fresh sync for this ticker in 10+ min — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
     <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
-    <td><strong>${fp(s.price)}</strong></td>
+    <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.last_open&&s.last_open>1?'up':s.last_open&&s.last_open<1?'dn':'nt'}">${lo}</td>
     <td style="color:var(--text2)">${fp(s.high20)}</td>
@@ -1403,10 +1416,11 @@ function rowBDPool(s) {
   const rc = s.hits>=6?'top-hit':'';
   const illiq = !s.liquid?'<span class="illiq-label">illiq</span>':'';
   const lo = s.last_open ? s.last_open.toFixed(4) : '—';
+  const stale = isStalePoolRow(s) ? `<span title="No fresh sync for this ticker in 10+ min — verify manually before trading on it" style="color:#ca8a04;font-size:11px;margin-left:4px">⏱ stale</span>` : '';
   return `<tr class="${rc}">
     <td><span class="hits-badge ${hitsClass(s.hits)}">${s.hits}</span></td>
     <td><span class="tk">${s.ticker.replace(MARKETS[currentMarket].suffix,'')}${illiq}<span class="tn">${s.name}</span></span> <a href="https://finance.yahoo.com/quote/${s.ticker}/news" target="_blank" rel="noopener" class="news-link" title="News for ${s.ticker.replace(MARKETS[currentMarket].suffix,'')}" onclick="event.stopPropagation()">📰</a></td>
-    <td><strong>${fp(s.price)}</strong></td>
+    <td><strong>${fp(s.price)}</strong>${stale}</td>
     <td class="${cls}">${fpc(p)}</td>
     <td class="${s.last_open&&s.last_open<1?'dn':s.last_open&&s.last_open>1?'up':'nt'}">${lo}</td>
     <td style="color:var(--text2)">${fp(s.low5)}</td>
